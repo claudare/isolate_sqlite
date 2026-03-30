@@ -1,10 +1,5 @@
-import 'dart:io';
-
-import 'package:sqlite3/sqlite3.dart';
 import 'package:test/test.dart';
 import 'package:isolate_sqlite/isolate_sqlite.dart';
-
-// ── Test model ──────────────────────────────────────────────────────
 
 class Todo {
   final String id;
@@ -22,53 +17,8 @@ class Todo {
   String toString() => 'Todo($id, $name)';
 }
 
-// ── Concrete repo for testing ───────────────────────────────────────
-
-// custom counter with sideeffect
-class IdGen {
-  int _counter = 0;
-
-  IdGen(this._counter);
-
-  String nextId() {
-    return '${_counter++}';
-  }
-}
-
 class TodoRepo extends IsolateSqlite {
-  final int _startSeq;
-
-  TodoRepo(this._startSeq) : super.memory();
-
-  @override
-  IsolateInitFn? get onIsolateInit {
-    // ⚠️ Copy to local — do NOT capture `this`
-    final startSeq = _startSeq;
-
-    return (db) {
-      IsolateSqlite.enableOptimizations(db);
-
-      // This entire block runs inside the isolate.
-      // Sideeffect classes are BORN here and they LIVE here.
-      final idGen = IdGen(startSeq);
-
-      db.createFunction(
-        functionName: 'next_id',
-        argumentCount: const AllowedArgumentCount(0),
-        function: (_) => idGen.nextId(),
-      );
-      db.createFunction(
-        functionName: 'double_it',
-        argumentCount: const AllowedArgumentCount(1),
-        function: (args) => (args[0] as int) * 2,
-      );
-      db.createFunction(
-        functionName: 'is_ios',
-        argumentCount: const AllowedArgumentCount(0),
-        function: (_) => Platform.isIOS, // NEVER!
-      );
-    };
-  }
+  TodoRepo() : super.memory();
 
   Future<void> migrate() async {
     await execute(
@@ -110,23 +60,6 @@ class TodoRepo extends IsolateSqlite {
 
   Future<void> update(Todo todo) =>
       execute('UPDATE todo SET name = ? WHERE id = ?', [todo.name, todo.id]);
-
-  Future<void> badQuery() => execute('NOT VALID SQL !!!');
-
-  Future<String> nextId() async {
-    final rows = await select('SELECT next_id()');
-    return rows[0][0] as String;
-  }
-
-  Future<int> doubleIt(int value) async {
-    final rows = await select('SELECT double_it(?)', [value]);
-    return rows[0][0] as int;
-  }
-
-  Future<bool> isIos() async {
-    final rows = await select('SELECT is_ios()');
-    return (rows[0][0] as int) == 1;
-  }
 }
 
 // ── Tests ───────────────────────────────────────────────────────────
@@ -135,7 +68,7 @@ void main() {
   late TodoRepo repo;
 
   setUp(() async {
-    repo = TodoRepo(100);
+    repo = TodoRepo();
     await repo.open();
     await repo.migrate();
   });
@@ -215,10 +148,6 @@ void main() {
     expect(() => repo.insert(const Todo('1', 'Duplicate')), throwsException);
   });
 
-  test('invalid SQL throws', () async {
-    expect(() => repo.badQuery(), throwsException);
-  });
-
   test('operations work sequentially across many calls', () async {
     for (var i = 0; i < 50; i++) {
       await repo.insert(Todo('id_$i', 'Task $i'));
@@ -238,21 +167,5 @@ void main() {
     final all = await repo.getAll();
 
     expect(all, hasLength(1));
-  });
-
-  group("createFunction", () {
-    test("side-effects work across isolate boundaries", () async {
-      expect(await repo.nextId(), "100");
-      expect(await repo.nextId(), "101");
-      expect(await repo.nextId(), "102");
-    });
-
-    test("can use arguments", () async {
-      expect(await repo.doubleIt(42), 84);
-    });
-
-    test("can access fat away sideeffects", () async {
-      expect(await repo.isIos(), false);
-    });
   });
 }

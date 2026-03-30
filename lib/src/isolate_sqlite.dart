@@ -29,6 +29,60 @@ class _OpenArgs {
   bool get inMemory => filename == ':memory:';
 }
 
+// ── Structured error ───────────────────────────────────────────────
+
+class IsolateSqliteException implements Exception {
+  final String message;
+  final int? sqliteResultCode;
+  final String? explanation;
+
+  IsolateSqliteException(
+    this.message, {
+    this.sqliteResultCode,
+    this.explanation,
+  });
+
+  @override
+  String toString() =>
+      'IsolateSqliteException: $message'
+      '${sqliteResultCode != null ? ' (code: $sqliteResultCode)' : ''}'
+      '${explanation != null ? '\n  $explanation' : ''}';
+}
+
+// ── Sync transaction handle ────────────────────────────────────────
+
+class Transaction {
+  final Database _db;
+  Transaction._(this._db);
+
+  List<List<Object?>> select(String sql, [List<Object?> params = const []]) {
+    return _db.select(sql, params).rows;
+  }
+
+  List<Object?>? selectOne(String sql, [List<Object?> params = const []]) {
+    final rows = select(sql, params);
+    return rows.isEmpty ? null : rows[0];
+  }
+
+  T? selectValue<T extends Object>(
+    String sql, [
+    List<Object?> params = const [],
+  ]) {
+    final rows = select(sql, params);
+    return rows.isEmpty
+        ? null
+        : rows[0].isEmpty
+        ? null
+        : rows[0][0] as T;
+  }
+
+  void execute(String sql, [List<Object?> params = const []]) {
+    _db.execute(sql, params);
+  }
+}
+
+// ── Base class ─────────────────────────────────────────────────────
+
 abstract class IsolateSqlite {
   final _OpenArgs _openArgs;
   bool _opened = false;
@@ -51,12 +105,6 @@ abstract class IsolateSqlite {
 
   IsolateSqlite.memory({String? vfs}) : _openArgs = _OpenArgs.memory(vfs: vfs);
 
-  /// Override to run initialization inside the background isolate.
-  ///
-  /// This is where you create mutable state and register custom SQL functions.
-  /// Everything the closure references is created/lives in the isolate.
-  ///
-  /// **Copy needed fields to local variables to avoid capturing `this`.**
   @protected
   IsolateInitFn? get onIsolateInit => null;
 
@@ -73,6 +121,25 @@ abstract class IsolateSqlite {
   }
 
   // ── Isolate entry point ──────────────────────────────────────────
+
+  static List _serializeError(Object e) {
+    if (e is SqliteException) {
+      return ['sqlite', e.message, e.extendedResultCode, e.explanation];
+    }
+    return ['generic', e.toString(), null, null];
+  }
+
+  static Exception _deserializeError(List err) {
+    final kind = err[0] as String;
+    if (kind == 'sqlite') {
+      return IsolateSqliteException(
+        err[1] as String,
+        sqliteResultCode: err[2] as int?,
+        explanation: err[3] as String?,
+      );
+    }
+    return Exception(err[1] as String);
+  }
 
   static void _isolateMain((_OpenArgs, IsolateInitFn?, SendPort) args) {
     final (openArgs, initFn, initPort) = args;
@@ -95,6 +162,27 @@ abstract class IsolateSqlite {
     cmdPort.listen((message) {
       final msg = message as List;
       final type = msg[0] as String;
+
+      // ── Transaction: ['transaction', callback, replyTo]
+      if (type == 'transaction') {
+        final fn = msg[1] as Object? Function(Transaction);
+        final replyTo = msg[2] as SendPort;
+
+        try {
+          db.execute('BEGIN');
+          final result = fn(Transaction._(db));
+          db.execute('COMMIT');
+          replyTo.send([null, result]);
+        } catch (e) {
+          try {
+            db.execute('ROLLBACK');
+          } catch (_) {}
+          replyTo.send([_serializeError(e), null]);
+        }
+        return;
+      }
+
+      // ── Standard: ['type', sql, params, replyTo]
       final sql = msg[1] as String;
       final params = (msg[2] as List).cast<Object?>();
       final replyTo = msg[3] as SendPort;
@@ -113,7 +201,7 @@ abstract class IsolateSqlite {
             cmdPort.close();
         }
       } catch (e) {
-        replyTo.send([e.toString(), null]);
+        replyTo.send([_serializeError(e), null]);
       }
     });
   }
@@ -129,7 +217,7 @@ abstract class IsolateSqlite {
     _cmdPort.send([type, sql, params, rp.sendPort]);
     final resp = await rp.first as List;
     rp.close();
-    if (resp[0] != null) throw Exception(resp[0] as String);
+    if (resp[0] != null) throw _deserializeError(resp[0] as List);
     return resp[1];
   }
 
@@ -171,6 +259,16 @@ abstract class IsolateSqlite {
     await _send('execute', sql, params);
   }
 
+  @protected
+  Future<T> transaction<T>(T Function(Transaction tx) action) async {
+    final rp = ReceivePort();
+    _cmdPort.send(['transaction', action, rp.sendPort]);
+    final resp = await rp.first as List;
+    rp.close();
+    if (resp[0] != null) throw _deserializeError(resp[0] as List);
+    return resp[1] as T;
+  }
+
   Future<void> close() async {
     await _send('close');
     _isolate.kill(priority: Isolate.immediate);
@@ -178,7 +276,7 @@ abstract class IsolateSqlite {
   }
 
   @protected
-  static void enableOptimizations(Database db) async {
+  static void enableOptimizations(Database db) {
     db.execute('PRAGMA journal_mode=WAL;');
     db.execute('PRAGMA busy_timeout = 1000;');
   }
