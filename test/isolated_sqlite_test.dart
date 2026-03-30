@@ -87,12 +87,13 @@ class TodoRepo extends IsolateSqlite {
   }
 
   Future<Todo?> getById(String id) async {
-    final rows = await select(
+    final row = await selectOne(
       'SELECT id, name FROM todo WHERE id = ? LIMIT 1',
       [id],
     );
-    if (rows.isEmpty) return null;
-    return Todo(rows[0][0] as String, rows[0][1] as String);
+    if (row == null) return null;
+
+    return Todo(row[0] as String, row[1] as String);
   }
 
   Future<List<Todo>> getAll() async {
@@ -100,10 +101,8 @@ class TodoRepo extends IsolateSqlite {
     return [for (final r in rows) Todo(r[0] as String, r[1] as String)];
   }
 
-  Future<int> count() async {
-    final rows = await select('SELECT COUNT(*) FROM todo');
-    return rows[0][0] as int;
-  }
+  Future<int> count() async =>
+      await selectValue<int>('SELECT COUNT(*) FROM todo') ?? 0;
 
   Future<void> deleteById(String id) =>
       execute('DELETE FROM todo WHERE id = ?', [id]);

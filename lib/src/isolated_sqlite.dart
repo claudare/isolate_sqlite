@@ -105,6 +105,28 @@ abstract class IsolateSqlite {
   }
 
   @protected
+  Future<List<Object?>?> selectOne(
+    String sql, [
+    List<Object?> params = const [],
+  ]) async {
+    final rows = await select(sql, params);
+    return rows.isEmpty ? null : rows[0];
+  }
+
+  @protected
+  Future<T?> selectValue<T extends Object>(
+    String sql, [
+    List<Object?> params = const [],
+  ]) async {
+    final rows = await select(sql, params);
+    return rows.isEmpty
+        ? null
+        : rows[0].isEmpty
+        ? null
+        : rows[0][0] as T;
+  }
+
+  @protected
   Future<void> execute(String sql, [List<Object?> params = const []]) async {
     await _send('execute', sql, params);
   }
