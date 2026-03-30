@@ -11,7 +11,6 @@ class _OpenArgs {
   final OpenMode mode;
   final bool uri;
   final bool? mutex;
-  final bool inMemory;
 
   const _OpenArgs({
     required this.filename,
@@ -19,15 +18,15 @@ class _OpenArgs {
     this.mode = OpenMode.readWriteCreate,
     this.uri = false,
     this.mutex,
-    this.inMemory = false,
   });
 
   const _OpenArgs.memory({this.vfs})
     : filename = ':memory:',
       mode = OpenMode.readWriteCreate,
       uri = false,
-      mutex = null,
-      inMemory = true;
+      mutex = null;
+
+  bool get inMemory => filename == ':memory:';
 }
 
 abstract class IsolateSqlite {
