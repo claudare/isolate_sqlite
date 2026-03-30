@@ -5,8 +5,11 @@ import 'package:sqlite3/sqlite3.dart';
 
 const dbMemoryPath = ':memory:';
 
+typedef IsolateInitFn = void Function(Database db);
+
 abstract class IsolateSqlite {
   final String _dbPath;
+  bool _opened = false;
   late final SendPort _cmdPort;
   late final Isolate _isolate;
 
@@ -14,21 +17,38 @@ abstract class IsolateSqlite {
 
   IsolateSqlite.memory() : _dbPath = dbMemoryPath;
 
-  /// Opens the database in a background isolate.
+  /// Override to run initialization inside the background isolate.
+  ///
+  /// This is where you create mutable state and register custom SQL functions.
+  /// Everything the closure references is created/lives in the isolate.
+  ///
+  /// **Copy needed fields to local variables to avoid capturing `this`.**
+  @protected
+  IsolateInitFn? get onIsolateInit => null;
+
   Future<void> open() async {
+    assert(!_opened, 'Database already opened');
+    _opened = true;
     final rp = ReceivePort();
-    _isolate = await Isolate.spawn(_isolateMain, (_dbPath, rp.sendPort));
+    _isolate = await Isolate.spawn(_isolateMain, (
+      _dbPath,
+      onIsolateInit,
+      rp.sendPort,
+    ));
     _cmdPort = await rp.first as SendPort;
   }
 
   // ── Isolate entry point ──────────────────────────────────────────
 
-  static void _isolateMain((String, SendPort) args) {
-    final (dbPath, initPort) = args;
+  static void _isolateMain((String, IsolateInitFn?, SendPort) args) {
+    final (dbPath, initFn, initPort) = args;
 
     final db = dbPath == dbMemoryPath
         ? sqlite3.openInMemory()
         : sqlite3.open(dbPath);
+
+    initFn?.call(db);
+
     final cmdPort = ReceivePort();
     initPort.send(cmdPort.sendPort);
 
@@ -43,9 +63,7 @@ abstract class IsolateSqlite {
         switch (type) {
           case 'select':
             final rs = db.select(sql, params);
-            final rows = rs.rows;
-
-            replyTo.send([null, rows]);
+            replyTo.send([null, rs.rows]);
           case 'execute':
             db.execute(sql, params);
             replyTo.send([null, null]);
@@ -83,9 +101,7 @@ abstract class IsolateSqlite {
     List<Object?> params = const [],
   ]) async {
     final data = await _send('select', sql, params);
-    final casted = (data! as List).cast<List<Object?>>();
-
-    return casted;
+    return data! as List<List<Object?>>;
   }
 
   @protected
@@ -93,18 +109,15 @@ abstract class IsolateSqlite {
     await _send('execute', sql, params);
   }
 
-  /// Closes the database and kills the isolate.
   Future<void> close() async {
     await _send('close');
     _isolate.kill(priority: Isolate.immediate);
+    _opened = false;
   }
 
-  // other helpers
   @protected
   Future<void> enableOptimizations() async {
-    // enable WAL
     await execute('PRAGMA journal_mode=WAL;');
-    // wait up to 1s before SQLITE_BUSY
     await execute('PRAGMA busy_timeout = 1000;');
   }
 }
