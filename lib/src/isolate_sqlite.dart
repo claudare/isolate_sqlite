@@ -6,6 +6,10 @@ import 'package:sqlite3/sqlite3.dart';
 typedef IsolateInitFn = Database Function();
 // typedef IsolateConfigFn = void Function(Database);
 
+enum _IsolateSendType { transaction, select, execute, close }
+
+enum _IsolateErrorType { sqlite, generic }
+
 class Transaction {
   final Database _db;
   const Transaction._(this._db);
@@ -36,8 +40,6 @@ class Transaction {
   }
 }
 
-// ── Base class ─────────────────────────────────────────────────────
-
 class IsolateSqlite {
   bool _opened = false;
   final IsolateInitFn _initFn;
@@ -53,7 +55,9 @@ class IsolateSqlite {
   }
 
   Future<void> open() async {
-    assert(!_opened, 'Database already opened');
+    if (_opened) {
+      throw StateError('Database already opened');
+    }
     _opened = true;
     final rp = ReceivePort();
     _isolate = await Isolate.spawn(_isolateMain, (_initFn, rp.sendPort));
@@ -61,22 +65,31 @@ class IsolateSqlite {
   }
 
   static List _serializeError(Object e) {
+    // TODO: serialize all values as SqliteException
     if (e is SqliteException) {
-      return ['sqlite', e.message, e.extendedResultCode, e.explanation];
+      return [
+        _IsolateErrorType.sqlite,
+        e.message,
+        e.extendedResultCode,
+        e.explanation,
+      ];
     }
-    return ['generic', e.toString(), null, null];
+    return [_IsolateErrorType.generic, e.toString(), null, null];
   }
 
   static Exception _deserializeError(List err) {
-    final kind = err[0] as String;
-    if (kind == 'sqlite') {
-      return IsolateSqliteException(
-        err[1] as String,
-        sqliteResultCode: err[2] as int?,
-        explanation: err[3] as String?,
-      );
+    final kind = err[0] as _IsolateErrorType;
+
+    switch (kind) {
+      case _IsolateErrorType.sqlite:
+        return IsolateSqliteException(
+          err[1] as String,
+          sqliteResultCode: err[2] as int?,
+          explanation: err[3] as String?,
+        );
+      case _IsolateErrorType.generic:
+        return Exception(err[1] as String);
     }
-    return Exception(err[1] as String);
   }
 
   static void _isolateMain((IsolateInitFn, SendPort) args) {
@@ -89,10 +102,10 @@ class IsolateSqlite {
 
     cmdPort.listen((message) {
       final msg = message as List;
-      final type = msg[0] as String;
+      final type = msg[0] as _IsolateSendType;
 
       // ── Transaction: ['transaction', callback, replyTo]
-      if (type == 'transaction') {
+      if (type == _IsolateSendType.transaction) {
         final fn = msg[1] as Object? Function(Transaction);
         final replyTo = msg[2] as SendPort;
 
@@ -117,16 +130,17 @@ class IsolateSqlite {
 
       try {
         switch (type) {
-          case 'select':
+          case _IsolateSendType.select:
             final rs = db.select(sql, params);
             replyTo.send([null, rs.rows]);
-          case 'execute':
+          case _IsolateSendType.execute:
             db.execute(sql, params);
             replyTo.send([null, null]);
-          case 'close':
+          case _IsolateSendType.close:
             db.close();
             replyTo.send([null, null]);
             cmdPort.close();
+          default:
         }
       } catch (e) {
         replyTo.send([_serializeError(e), null]);
@@ -137,7 +151,7 @@ class IsolateSqlite {
   // ── Internal messaging ───────────────────────────────────────────
 
   Future<Object?> _send(
-    String type, [
+    _IsolateSendType type, [
     String sql = '',
     List<Object?> params = const [],
   ]) async {
@@ -154,7 +168,7 @@ class IsolateSqlite {
     String sql, [
     List<Object?> params = const [],
   ]) async {
-    final data = await _send('select', sql, params);
+    final data = await _send(_IsolateSendType.select, sql, params);
     return data! as List<List<Object?>>;
   }
 
@@ -186,13 +200,13 @@ class IsolateSqlite {
 
   /// Executes SQL and returns nothing.
   Future<void> exec(String sql, [List<Object?> params = const []]) async {
-    await _send('execute', sql, params);
+    await _send(_IsolateSendType.execute, sql, params);
   }
 
   /// Starts a syncronous transaction.
   Future<T> transaction<T>(T Function(Transaction tx) action) async {
     final rp = ReceivePort();
-    _cmdPort.send(['transaction', action, rp.sendPort]);
+    _cmdPort.send([_IsolateSendType.transaction, action, rp.sendPort]);
     final resp = await rp.first as List;
     rp.close();
     if (resp[0] != null) throw _deserializeError(resp[0] as List);
@@ -200,7 +214,7 @@ class IsolateSqlite {
   }
 
   Future<void> close() async {
-    await _send('close');
+    await _send(_IsolateSendType.close);
     _isolate.kill(priority: Isolate.immediate);
     _opened = false;
   }

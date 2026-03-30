@@ -1,5 +1,6 @@
 import 'sqlite_result_code.dart';
 
+// TODO: use SqliteException instead
 class IsolateSqliteException implements Exception {
   final String message;
   final int? sqliteResultCode;
