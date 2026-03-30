@@ -1,8 +1,9 @@
 import 'package:isolate_sqlite/isolate_sqlite.dart';
+import 'package:sqlite3/sqlite3.dart' show sqlite3;
 import 'package:test/test.dart';
 
 class ErrorRepo extends IsolateSqlite {
-  ErrorRepo() : super.memory();
+  ErrorRepo(super.initFn);
 
   Future<void> createTable() =>
       execute('CREATE TABLE t (id TEXT PRIMARY KEY, val TEXT NOT NULL)');
@@ -25,7 +26,7 @@ void main() {
   late ErrorRepo repo;
 
   setUp(() async {
-    repo = ErrorRepo();
+    repo = ErrorRepo(() => sqlite3.openInMemory());
     await repo.open();
     await repo.createTable();
   });

@@ -1,36 +1,10 @@
 import 'dart:async';
 import 'dart:isolate';
 import 'package:isolate_sqlite/src/solate_sqlite_exception.dart';
-import 'package:meta/meta.dart';
 import 'package:sqlite3/sqlite3.dart';
 
-typedef IsolateInitFn = void Function(Database db);
-
-class _OpenArgs {
-  final String filename;
-  final String? vfs;
-  final OpenMode mode;
-  final bool uri;
-  final bool? mutex;
-
-  const _OpenArgs({
-    required this.filename,
-    this.vfs,
-    this.mode = OpenMode.readWriteCreate,
-    this.uri = false,
-    this.mutex,
-  });
-
-  const _OpenArgs.memory({this.vfs})
-    : filename = ':memory:',
-      mode = OpenMode.readWriteCreate,
-      uri = false,
-      mutex = null;
-
-  bool get inMemory => filename == ':memory:';
-}
-
-// ── Sync transaction handle ────────────────────────────────────────
+typedef IsolateInitFn = Database Function();
+// typedef IsolateConfigFn = void Function(Database);
 
 class Transaction {
   final Database _db;
@@ -64,40 +38,23 @@ class Transaction {
 
 // ── Base class ─────────────────────────────────────────────────────
 
-abstract class IsolateSqlite {
-  final _OpenArgs _openArgs;
+class IsolateSqlite {
   bool _opened = false;
+  final IsolateInitFn _initFn;
   late final SendPort _cmdPort;
   late final Isolate _isolate;
 
-  IsolateSqlite(
-    String filename, {
-    String? vfs,
-    OpenMode mode = OpenMode.readWriteCreate,
-    bool uri = false,
-    bool? mutex,
-  }) : _openArgs = _OpenArgs(
-         filename: filename,
-         vfs: vfs,
-         mode: mode,
-         uri: uri,
-         mutex: mutex,
-       );
+  IsolateSqlite(this._initFn);
 
-  IsolateSqlite.memory({String? vfs}) : _openArgs = _OpenArgs.memory(vfs: vfs);
+  static IsolateInitFn memoryInitFn = () => sqlite3.openInMemory();
 
-  @protected
-  IsolateInitFn? get onIsolateInit => null;
+  // IsolateConfigFn? get onIsolateInit => null;
 
   Future<void> open() async {
     assert(!_opened, 'Database already opened');
     _opened = true;
     final rp = ReceivePort();
-    _isolate = await Isolate.spawn(_isolateMain, (
-      _openArgs,
-      onIsolateInit,
-      rp.sendPort,
-    ));
+    _isolate = await Isolate.spawn(_isolateMain, (_initFn, rp.sendPort));
     _cmdPort = await rp.first as SendPort;
   }
 
@@ -122,20 +79,10 @@ abstract class IsolateSqlite {
     return Exception(err[1] as String);
   }
 
-  static void _isolateMain((_OpenArgs, IsolateInitFn?, SendPort) args) {
-    final (openArgs, initFn, initPort) = args;
+  static void _isolateMain((IsolateInitFn, SendPort) args) {
+    final (initFn, initPort) = args;
 
-    final db = openArgs.inMemory
-        ? sqlite3.openInMemory(vfs: openArgs.vfs)
-        : sqlite3.open(
-            openArgs.filename,
-            vfs: openArgs.vfs,
-            mode: openArgs.mode,
-            uri: openArgs.uri,
-            mutex: openArgs.mutex,
-          );
-
-    initFn?.call(db);
+    final db = initFn();
 
     final cmdPort = ReceivePort();
     initPort.send(cmdPort.sendPort);
@@ -204,7 +151,6 @@ abstract class IsolateSqlite {
 
   // ── Protected API for subclasses ─────────────────────────────────
 
-  @protected
   Future<List<List<Object?>>> select(
     String sql, [
     List<Object?> params = const [],
@@ -213,7 +159,6 @@ abstract class IsolateSqlite {
     return data! as List<List<Object?>>;
   }
 
-  @protected
   Future<List<Object?>?> selectOne(
     String sql, [
     List<Object?> params = const [],
@@ -222,7 +167,6 @@ abstract class IsolateSqlite {
     return rows.isEmpty ? null : rows[0];
   }
 
-  @protected
   Future<T?> selectValue<T extends Object>(
     String sql, [
     List<Object?> params = const [],
@@ -235,12 +179,10 @@ abstract class IsolateSqlite {
         : rows[0][0] as T;
   }
 
-  @protected
   Future<void> execute(String sql, [List<Object?> params = const []]) async {
     await _send('execute', sql, params);
   }
 
-  @protected
   Future<T> transaction<T>(T Function(Transaction tx) action) async {
     final rp = ReceivePort();
     _cmdPort.send(['transaction', action, rp.sendPort]);
@@ -256,7 +198,6 @@ abstract class IsolateSqlite {
     _opened = false;
   }
 
-  @protected
   static void enableOptimizations(Database db) {
     db.execute('PRAGMA journal_mode=WAL;');
     db.execute('PRAGMA busy_timeout = 1000;');

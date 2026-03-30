@@ -1,3 +1,4 @@
+import 'package:sqlite3/sqlite3.dart';
 import 'package:test/test.dart';
 import 'package:isolate_sqlite/isolate_sqlite.dart';
 
@@ -18,7 +19,7 @@ class Todo {
 }
 
 class TodoRepo extends IsolateSqlite {
-  TodoRepo() : super.memory();
+  TodoRepo(super.initFn);
 
   Future<void> migrate() async {
     await execute(
@@ -68,7 +69,7 @@ void main() {
   late TodoRepo repo;
 
   setUp(() async {
-    repo = TodoRepo();
+    repo = TodoRepo(() => sqlite3.openInMemory());
     await repo.open();
     await repo.migrate();
   });

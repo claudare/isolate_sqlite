@@ -2,7 +2,7 @@ import 'package:test/test.dart';
 import 'package:isolate_sqlite/src/isolate_sqlite.dart';
 
 class TxRepo extends IsolateSqlite {
-  TxRepo() : super.memory();
+  TxRepo(super.initFn);
 
   Future<void> createTable() => execute('''
     CREATE TABLE account (
@@ -50,7 +50,7 @@ void main() {
   late TxRepo repo;
 
   setUp(() async {
-    repo = TxRepo();
+    repo = TxRepo(IsolateSqlite.memoryInitFn);
     await repo.open();
     await repo.createTable();
     await repo.seed('alice', 100);

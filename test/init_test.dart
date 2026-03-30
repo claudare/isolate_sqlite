@@ -16,39 +16,34 @@ class IdGen {
 }
 
 class InitRepo extends IsolateSqlite {
-  final int _startSeq;
+  InitRepo(IsolateInitFn initFn, int startSeq)
+    : super(() {
+        final db = initFn();
 
-  InitRepo(this._startSeq) : super.memory();
+        IsolateSqlite.enableOptimizations(db);
 
-  @override
-  IsolateInitFn? get onIsolateInit {
-    // ⚠️ Copy to local — do NOT capture `this`
-    final startSeq = _startSeq;
+        // This entire block runs inside the isolate.
+        // Sideeffect classes are BORN here and they LIVE here.
+        final idGen = IdGen(startSeq);
 
-    return (db) {
-      IsolateSqlite.enableOptimizations(db);
+        db.createFunction(
+          functionName: 'next_id',
+          argumentCount: const AllowedArgumentCount(0),
+          function: (_) => idGen.nextId(),
+        );
+        db.createFunction(
+          functionName: 'double_it',
+          argumentCount: const AllowedArgumentCount(1),
+          function: (args) => (args[0] as int) * 2,
+        );
+        db.createFunction(
+          functionName: 'is_ios',
+          argumentCount: const AllowedArgumentCount(0),
+          function: (_) => Platform.isIOS, // NEVER!
+        );
 
-      // This entire block runs inside the isolate.
-      // Sideeffect classes are BORN here and they LIVE here.
-      final idGen = IdGen(startSeq);
-
-      db.createFunction(
-        functionName: 'next_id',
-        argumentCount: const AllowedArgumentCount(0),
-        function: (_) => idGen.nextId(),
-      );
-      db.createFunction(
-        functionName: 'double_it',
-        argumentCount: const AllowedArgumentCount(1),
-        function: (args) => (args[0] as int) * 2,
-      );
-      db.createFunction(
-        functionName: 'is_ios',
-        argumentCount: const AllowedArgumentCount(0),
-        function: (_) => Platform.isIOS, // NEVER!
-      );
-    };
-  }
+        return db;
+      });
 
   Future<String> nextId() async {
     final rows = await select('SELECT next_id()');
@@ -72,7 +67,7 @@ void main() {
   late InitRepo repo;
 
   setUp(() async {
-    repo = InitRepo(100);
+    repo = InitRepo(IsolateSqlite.memoryInitFn, 100);
     await repo.open();
   });
 
