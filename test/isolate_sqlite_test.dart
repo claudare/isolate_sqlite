@@ -2,7 +2,7 @@ import 'dart:io';
 
 import 'package:sqlite3/sqlite3.dart';
 import 'package:test/test.dart';
-import 'package:isolated_sqlite/isolated_sqlite.dart';
+import 'package:isolate_sqlite/isolate_sqlite.dart';
 
 // ── Test model ──────────────────────────────────────────────────────
 

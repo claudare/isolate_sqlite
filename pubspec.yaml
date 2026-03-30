@@ -1,5 +1,5 @@
-name: isolated_sqlite
-description: A starting point for Dart libraries or applications.
+name: isolate_sqlite
+description: Run an SQLite database in the isolate the easy way.
 version: 1.0.0
 # repository: https://github.com/my_org/my_repo
 
