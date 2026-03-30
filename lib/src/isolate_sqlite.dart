@@ -3,19 +3,54 @@ import 'dart:isolate';
 import 'package:meta/meta.dart';
 import 'package:sqlite3/sqlite3.dart';
 
-const dbMemoryPath = ':memory:';
-
 typedef IsolateInitFn = void Function(Database db);
 
+class _OpenArgs {
+  final String filename;
+  final String? vfs;
+  final OpenMode mode;
+  final bool uri;
+  final bool? mutex;
+  final bool inMemory;
+
+  const _OpenArgs({
+    required this.filename,
+    this.vfs,
+    this.mode = OpenMode.readWriteCreate,
+    this.uri = false,
+    this.mutex,
+    this.inMemory = false,
+  });
+
+  const _OpenArgs.memory({this.vfs})
+    : filename = ':memory:',
+      mode = OpenMode.readWriteCreate,
+      uri = false,
+      mutex = null,
+      inMemory = true;
+}
+
 abstract class IsolateSqlite {
-  final String _dbPath;
+  final _OpenArgs _openArgs;
   bool _opened = false;
   late final SendPort _cmdPort;
   late final Isolate _isolate;
 
-  IsolateSqlite(this._dbPath);
+  IsolateSqlite(
+    String filename, {
+    String? vfs,
+    OpenMode mode = OpenMode.readWriteCreate,
+    bool uri = false,
+    bool? mutex,
+  }) : _openArgs = _OpenArgs(
+         filename: filename,
+         vfs: vfs,
+         mode: mode,
+         uri: uri,
+         mutex: mutex,
+       );
 
-  IsolateSqlite.memory() : _dbPath = dbMemoryPath;
+  IsolateSqlite.memory({String? vfs}) : _openArgs = _OpenArgs.memory(vfs: vfs);
 
   /// Override to run initialization inside the background isolate.
   ///
@@ -31,7 +66,7 @@ abstract class IsolateSqlite {
     _opened = true;
     final rp = ReceivePort();
     _isolate = await Isolate.spawn(_isolateMain, (
-      _dbPath,
+      _openArgs,
       onIsolateInit,
       rp.sendPort,
     ));
@@ -40,12 +75,18 @@ abstract class IsolateSqlite {
 
   // ── Isolate entry point ──────────────────────────────────────────
 
-  static void _isolateMain((String, IsolateInitFn?, SendPort) args) {
-    final (dbPath, initFn, initPort) = args;
+  static void _isolateMain((_OpenArgs, IsolateInitFn?, SendPort) args) {
+    final (openArgs, initFn, initPort) = args;
 
-    final db = dbPath == dbMemoryPath
-        ? sqlite3.openInMemory()
-        : sqlite3.open(dbPath);
+    final db = openArgs.inMemory
+        ? sqlite3.openInMemory(vfs: openArgs.vfs)
+        : sqlite3.open(
+            openArgs.filename,
+            vfs: openArgs.vfs,
+            mode: openArgs.mode,
+            uri: openArgs.uri,
+            mutex: openArgs.mutex,
+          );
 
     initFn?.call(db);
 
