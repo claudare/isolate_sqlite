@@ -138,8 +138,8 @@ abstract class IsolateSqlite {
   }
 
   @protected
-  Future<void> enableOptimizations() async {
-    await execute('PRAGMA journal_mode=WAL;');
-    await execute('PRAGMA busy_timeout = 1000;');
+  static void enableOptimizations(Database db) async {
+    db.execute('PRAGMA journal_mode=WAL;');
+    db.execute('PRAGMA busy_timeout = 1000;');
   }
 }

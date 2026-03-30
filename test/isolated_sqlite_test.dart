@@ -46,6 +46,8 @@ class TodoRepo extends IsolateSqlite {
     final startSeq = _startSeq;
 
     return (db) {
+      IsolateSqlite.enableOptimizations(db);
+
       // This entire block runs inside the isolate.
       // Sideeffect classes are BORN here and they LIVE here.
       final idGen = IdGen(startSeq);
@@ -72,7 +74,6 @@ class TodoRepo extends IsolateSqlite {
     await execute(
       'CREATE TABLE todo (id TEXT PRIMARY KEY, name TEXT NOT NULL)',
     );
-    await enableOptimizations();
   }
 
   Future<void> insert(Todo todo) => execute(
