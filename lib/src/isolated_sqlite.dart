@@ -98,4 +98,13 @@ abstract class IsolateSqlite {
     await _send('close');
     _isolate.kill(priority: Isolate.immediate);
   }
+
+  // other helpers
+  @protected
+  Future<void> enableOptimizations() async {
+    // enable WAL
+    await execute('PRAGMA journal_mode=WAL;');
+    // wait up to 1s before SQLITE_BUSY
+    await execute('PRAGMA busy_timeout = 1000;');
+  }
 }

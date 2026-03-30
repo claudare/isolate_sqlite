@@ -24,8 +24,12 @@ class Todo {
 class TodoRepo extends IsolateSqlite {
   TodoRepo() : super.memory();
 
-  Future<void> createTable() =>
-      execute('CREATE TABLE todo (id TEXT PRIMARY KEY, name TEXT NOT NULL)');
+  Future<void> migrate() async {
+    await execute(
+      'CREATE TABLE todo (id TEXT PRIMARY KEY, name TEXT NOT NULL)',
+    );
+    await enableOptimizations();
+  }
 
   Future<void> insert(Todo todo) => execute(
     'INSERT INTO todo (id, name) VALUES (?, ?)',
@@ -74,7 +78,7 @@ void main() {
   setUp(() async {
     repo = TodoRepo();
     await repo.open();
-    await repo.createTable();
+    await repo.migrate();
   });
 
   tearDown(() async {
@@ -180,7 +184,7 @@ void main() {
   test('independent repo instances are isolated', () async {
     final repo2 = TodoRepo();
     await repo2.open();
-    await repo2.createTable();
+    await repo2.migrate();
 
     await repo.insert(const Todo('1', 'In repo 1'));
     await repo2.insert(const Todo('2', 'In repo 2'));
