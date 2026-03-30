@@ -24,6 +24,18 @@ class ErrorRepo extends IsolateSqlite {
   Future<void> dartError() => transaction((tx) {
     throw Error();
   });
+
+  Future<void> multipleErrorRow() async {
+    await insert('1', 'first');
+    await insert('2', 'second');
+    await queryRow('SELECT * FROM t');
+  }
+
+  Future<void> multipleErrorValue() async {
+    await insert('1', 'first');
+    await insert('2', 'second');
+    await queryValue('SELECT id FROM t');
+  }
 }
 
 void main() {
@@ -88,6 +100,14 @@ void main() {
 
     test('dart errors are passed through', () async {
       expect(() => repo.dartError(), throwsA(isA<Error>()));
+    });
+
+    test('multiple row return throws StateError', () async {
+      expect(() => repo.multipleErrorRow(), throwsA(isA<StateError>()));
+    });
+
+    test('multiple value return throws StateError', () async {
+      expect(() => repo.multipleErrorValue(), throwsA(isA<StateError>()));
     });
   });
 }

@@ -18,6 +18,10 @@ class Transaction {
 
   List<Object?>? queryRow(String sql, [List<Object?> params = const []]) {
     final rows = query(sql, params);
+    if (rows.length > 1) {
+      throw StateError('More than one row returned for queryValue');
+    }
+
     return rows.isEmpty ? null : rows[0];
   }
 
@@ -26,6 +30,10 @@ class Transaction {
     List<Object?> params = const [],
   ]) {
     final rows = query(sql, params);
+    if (rows.length > 1) {
+      throw StateError('More than one row returned for queryValue');
+    }
+
     return rows.isEmpty
         ? null
         : rows[0].isEmpty
@@ -151,6 +159,10 @@ class IsolateSqlite {
     List<Object?> params = const [],
   ]) async {
     final rows = await query(sql, params);
+    if (rows.length > 1) {
+      throw StateError('More than one row returned for queryValue');
+    }
+
     return rows.isEmpty ? null : rows[0];
   }
 
@@ -165,6 +177,7 @@ class IsolateSqlite {
     if (rows.length > 1) {
       throw StateError('More than one row returned for queryValue');
     }
+
     return rows.isEmpty
         ? null
         : rows[0].isEmpty
