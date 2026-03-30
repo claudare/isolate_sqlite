@@ -46,17 +46,17 @@ class InitRepo extends IsolateSqlite {
       });
 
   Future<String> nextId() async {
-    final rows = await select('SELECT next_id()');
+    final rows = await query('SELECT next_id()');
     return rows[0][0] as String;
   }
 
   Future<int> doubleIt(int value) async {
-    final rows = await select('SELECT double_it(?)', [value]);
+    final rows = await query('SELECT double_it(?)', [value]);
     return rows[0][0] as int;
   }
 
   Future<bool> isIos() async {
-    final rows = await select('SELECT is_ios()');
+    final rows = await query('SELECT is_ios()');
     return (rows[0][0] as int) == 1;
   }
 }

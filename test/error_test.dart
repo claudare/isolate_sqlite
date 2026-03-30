@@ -6,15 +6,15 @@ class ErrorRepo extends IsolateSqlite {
   ErrorRepo(super.initFn);
 
   Future<void> createTable() =>
-      execute('CREATE TABLE t (id TEXT PRIMARY KEY, val TEXT NOT NULL)');
+      exec('CREATE TABLE t (id TEXT PRIMARY KEY, val TEXT NOT NULL)');
 
   Future<void> insert(String id, String val) =>
-      execute('INSERT INTO t (id, val) VALUES (?, ?)', [id, val]);
+      exec('INSERT INTO t (id, val) VALUES (?, ?)', [id, val]);
 
-  Future<void> badSql() => execute('NOT VALID SQL');
+  Future<void> badSql() => exec('NOT VALID SQL');
 
   Future<void> badTransaction() => transaction((tx) {
-    tx.execute('NOT VALID SQL');
+    tx.exec('NOT VALID SQL');
   });
 
   Future<void> dartError() => transaction((tx) {

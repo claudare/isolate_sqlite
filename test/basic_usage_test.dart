@@ -22,15 +22,11 @@ class TodoRepo extends IsolateSqlite {
   TodoRepo(super.initFn);
 
   Future<void> migrate() async {
-    await execute(
-      'CREATE TABLE todo (id TEXT PRIMARY KEY, name TEXT NOT NULL)',
-    );
+    await exec('CREATE TABLE todo (id TEXT PRIMARY KEY, name TEXT NOT NULL)');
   }
 
-  Future<void> insert(Todo todo) => execute(
-    'INSERT INTO todo (id, name) VALUES (?, ?)',
-    [todo.id, todo.name],
-  );
+  Future<void> insert(Todo todo) =>
+      exec('INSERT INTO todo (id, name) VALUES (?, ?)', [todo.id, todo.name]);
 
   Future<void> insertAll(List<Todo> todos) async {
     for (final t in todos) {
@@ -39,7 +35,7 @@ class TodoRepo extends IsolateSqlite {
   }
 
   Future<Todo?> getById(String id) async {
-    final row = await selectOne(
+    final row = await queryRow(
       'SELECT id, name FROM todo WHERE id = ? LIMIT 1',
       [id],
     );
@@ -49,18 +45,18 @@ class TodoRepo extends IsolateSqlite {
   }
 
   Future<List<Todo>> getAll() async {
-    final rows = await select('SELECT id, name FROM todo ORDER BY id');
+    final rows = await query('SELECT id, name FROM todo ORDER BY id');
     return [for (final r in rows) Todo(r[0] as String, r[1] as String)];
   }
 
   Future<int> count() async =>
-      await selectValue<int>('SELECT COUNT(*) FROM todo') ?? 0;
+      await queryValue<int>('SELECT COUNT(*) FROM todo') ?? 0;
 
   Future<void> deleteById(String id) =>
-      execute('DELETE FROM todo WHERE id = ?', [id]);
+      exec('DELETE FROM todo WHERE id = ?', [id]);
 
   Future<void> update(Todo todo) =>
-      execute('UPDATE todo SET name = ? WHERE id = ?', [todo.name, todo.id]);
+      exec('UPDATE todo SET name = ? WHERE id = ?', [todo.name, todo.id]);
 }
 
 // ── Tests ───────────────────────────────────────────────────────────

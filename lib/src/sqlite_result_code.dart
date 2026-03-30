@@ -1,6 +1,7 @@
 /// Common SQLite result codes relevant to application logic.
 ///
 /// Reference: https://www.sqlite.org/rescode.html
+/// TODO: use [SqlExtendedError] from sqlite3 instead.
 abstract final class SqliteResultCode {
   // ── Primary ────────────────────────────────────────────────────
 

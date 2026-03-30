@@ -8,22 +8,22 @@ typedef IsolateInitFn = Database Function();
 
 class Transaction {
   final Database _db;
-  Transaction._(this._db);
+  const Transaction._(this._db);
 
-  List<List<Object?>> select(String sql, [List<Object?> params = const []]) {
+  List<List<Object?>> query(String sql, [List<Object?> params = const []]) {
     return _db.select(sql, params).rows;
   }
 
-  List<Object?>? selectOne(String sql, [List<Object?> params = const []]) {
-    final rows = select(sql, params);
+  List<Object?>? queryRow(String sql, [List<Object?> params = const []]) {
+    final rows = query(sql, params);
     return rows.isEmpty ? null : rows[0];
   }
 
-  T? selectValue<T extends Object>(
+  T? queryValue<T extends Object>(
     String sql, [
     List<Object?> params = const [],
   ]) {
-    final rows = select(sql, params);
+    final rows = query(sql, params);
     return rows.isEmpty
         ? null
         : rows[0].isEmpty
@@ -31,7 +31,7 @@ class Transaction {
         : rows[0][0] as T;
   }
 
-  void execute(String sql, [List<Object?> params = const []]) {
+  void exec(String sql, [List<Object?> params = const []]) {
     _db.execute(sql, params);
   }
 }
@@ -52,8 +52,6 @@ class IsolateSqlite {
     return () => sqlite3.open(filename);
   }
 
-  // IsolateConfigFn? get onIsolateInit => null;
-
   Future<void> open() async {
     assert(!_opened, 'Database already opened');
     _opened = true;
@@ -61,8 +59,6 @@ class IsolateSqlite {
     _isolate = await Isolate.spawn(_isolateMain, (_initFn, rp.sendPort));
     _cmdPort = await rp.first as SendPort;
   }
-
-  // ── Isolate entry point ──────────────────────────────────────────
 
   static List _serializeError(Object e) {
     if (e is SqliteException) {
@@ -153,9 +149,8 @@ class IsolateSqlite {
     return resp[1];
   }
 
-  // ── Protected API for subclasses ─────────────────────────────────
-
-  Future<List<List<Object?>>> select(
+  /// Queries and returns all rows.
+  Future<List<List<Object?>>> query(
     String sql, [
     List<Object?> params = const [],
   ]) async {
@@ -163,19 +158,25 @@ class IsolateSqlite {
     return data! as List<List<Object?>>;
   }
 
-  Future<List<Object?>?> selectOne(
+  /// Queries and returns the first row, `null` if no rows are returned.
+  Future<List<Object?>?> queryRow(
     String sql, [
     List<Object?> params = const [],
   ]) async {
-    final rows = await select(sql, params);
+    final rows = await query(sql, params);
     return rows.isEmpty ? null : rows[0];
   }
 
-  Future<T?> selectValue<T extends Object>(
+  /// Queries and returns the first value of the first row, `null` if no rows are returned.
+  /// Throws [StateError] if more then one row is returned.
+  Future<T?> queryValue<T extends Object>(
     String sql, [
     List<Object?> params = const [],
   ]) async {
-    final rows = await select(sql, params);
+    final rows = await query(sql, params);
+    if (rows.length > 1) {
+      throw StateError('More than one row returned for queryValue');
+    }
     return rows.isEmpty
         ? null
         : rows[0].isEmpty
@@ -183,10 +184,12 @@ class IsolateSqlite {
         : rows[0][0] as T;
   }
 
-  Future<void> execute(String sql, [List<Object?> params = const []]) async {
+  /// Executes SQL and returns nothing.
+  Future<void> exec(String sql, [List<Object?> params = const []]) async {
     await _send('execute', sql, params);
   }
 
+  /// Starts a syncronous transaction.
   Future<T> transaction<T>(T Function(Transaction tx) action) async {
     final rp = ReceivePort();
     _cmdPort.send(['transaction', action, rp.sendPort]);
