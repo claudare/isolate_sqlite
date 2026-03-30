@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:isolate';
+import 'package:isolate_sqlite/src/solate_sqlite_exception.dart';
 import 'package:meta/meta.dart';
 import 'package:sqlite3/sqlite3.dart';
 
@@ -27,26 +28,6 @@ class _OpenArgs {
       mutex = null;
 
   bool get inMemory => filename == ':memory:';
-}
-
-// ── Structured error ───────────────────────────────────────────────
-
-class IsolateSqliteException implements Exception {
-  final String message;
-  final int? sqliteResultCode;
-  final String? explanation;
-
-  IsolateSqliteException(
-    this.message, {
-    this.sqliteResultCode,
-    this.explanation,
-  });
-
-  @override
-  String toString() =>
-      'IsolateSqliteException: $message'
-      '${sqliteResultCode != null ? ' (code: $sqliteResultCode)' : ''}'
-      '${explanation != null ? '\n  $explanation' : ''}';
 }
 
 // ── Sync transaction handle ────────────────────────────────────────

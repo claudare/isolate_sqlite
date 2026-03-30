@@ -1,5 +1,5 @@
+import 'package:isolate_sqlite/isolate_sqlite.dart';
 import 'package:test/test.dart';
-import 'package:isolate_sqlite/src/isolate_sqlite.dart';
 
 class ErrorRepo extends IsolateSqlite {
   ErrorRepo() : super.memory();
@@ -32,45 +32,51 @@ void main() {
 
   tearDown(() => repo.close());
 
-  test('bad SQL throws IsolateSqliteException', () async {
-    expect(() => repo.badSql(), throwsA(isA<IsolateSqliteException>()));
-  });
+  group("errors", () {
+    test('bad SQL throws IsolateSqliteException', () async {
+      expect(() => repo.badSql(), throwsA(isA<IsolateSqliteException>()));
+    });
 
-  test('duplicate primary key throws IsolateSqliteException', () async {
-    await repo.insert('1', 'first');
+    test('duplicate primary key throws IsolateSqliteException', () async {
+      await repo.insert('1', 'first');
 
-    expect(
-      () => repo.insert('1', 'dupe'),
-      throwsA(isA<IsolateSqliteException>()),
-    );
-  });
+      expect(
+        () => repo.insert('1', 'dupe'),
+        throwsA(isA<IsolateSqliteException>()),
+      );
+    });
 
-  test('exception has result code', () async {
-    await repo.insert('1', 'first');
+    test('exception has result code', () async {
+      await repo.insert('1', 'first');
 
-    try {
-      await repo.insert('1', 'dupe');
-      fail('should have thrown');
-    } on IsolateSqliteException catch (e) {
-      expect(e.sqliteResultCode, isNotNull);
-      expect(e.message, isNotEmpty);
-    }
-  });
+      try {
+        await repo.insert('1', 'dupe');
+        fail('should have thrown');
+      } on IsolateSqliteException catch (e) {
+        expect(e.isPrimaryKeyViolation, true);
+        expect(e.sqliteResultCode, isNotNull);
+        expect(e.message, isNotEmpty);
+      }
+    });
 
-  test('bad SQL in transaction throws IsolateSqliteException', () async {
-    expect(() => repo.badTransaction(), throwsA(isA<IsolateSqliteException>()));
-  });
+    test('bad SQL in transaction throws IsolateSqliteException', () async {
+      expect(
+        () => repo.badTransaction(),
+        throwsA(isA<IsolateSqliteException>()),
+      );
+    });
 
-  test('dart exception in transaction stays as Exception', () async {
-    expect(
-      () => repo.dartError(),
-      throwsA(
-        isA<Exception>().having(
-          (e) => e.toString(),
-          'msg',
-          contains('dart exception'),
+    test('dart exception in transaction stays as Exception', () async {
+      expect(
+        () => repo.dartError(),
+        throwsA(
+          isA<Exception>().having(
+            (e) => e.toString(),
+            'msg',
+            contains('dart exception'),
+          ),
         ),
-      ),
-    );
+      );
+    });
   });
 }
