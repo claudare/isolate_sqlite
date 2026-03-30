@@ -1,5 +1,5 @@
 import 'package:isolate_sqlite/isolate_sqlite.dart';
-import 'package:sqlite3/sqlite3.dart' show sqlite3;
+import 'package:sqlite3/sqlite3.dart';
 import 'package:test/test.dart';
 
 class ErrorRepo extends IsolateSqlite {
@@ -17,8 +17,12 @@ class ErrorRepo extends IsolateSqlite {
     tx.exec('NOT VALID SQL');
   });
 
-  Future<void> dartError() => transaction((tx) {
+  Future<void> dartException() => transaction((tx) {
     throw Exception('dart exception');
+  });
+
+  Future<void> dartError() => transaction((tx) {
+    throw Error();
   });
 }
 
@@ -34,42 +38,44 @@ void main() {
   tearDown(() => repo.close());
 
   group("errors", () {
-    test('bad SQL throws IsolateSqliteException', () async {
-      expect(() => repo.badSql(), throwsA(isA<IsolateSqliteException>()));
-    });
-
-    test('duplicate primary key throws IsolateSqliteException', () async {
-      await repo.insert('1', 'first');
-
-      expect(
-        () => repo.insert('1', 'dupe'),
-        throwsA(isA<IsolateSqliteException>()),
-      );
-    });
-
-    test('exception has result code', () async {
+    test('SqliteException is returned in full', () async {
       await repo.insert('1', 'first');
 
       try {
         await repo.insert('1', 'dupe');
         fail('should have thrown');
-      } on IsolateSqliteException catch (e) {
-        expect(e.isPrimaryKeyViolation, true);
-        expect(e.sqliteResultCode, isNotNull);
-        expect(e.message, isNotEmpty);
+      } on SqliteException catch (e) {
+        expect(e.message, "UNIQUE constraint failed: t.id");
+        expect(e.explanation, "constraint failed (code 1555)");
+        expect(
+          e.extendedResultCode,
+          SqlExtendedError.SQLITE_CONSTRAINT_PRIMARYKEY,
+        );
+        expect(e.resultCode, 19);
+        expect(e.offset, isNull);
+        expect(e.operation, "executing statement");
+        expect(e.causingStatement, "INSERT INTO t (id, val) VALUES (?, ?)");
+        expect(e.parametersToStatement, equals(['1', 'dupe']));
       }
     });
 
-    test('bad SQL in transaction throws IsolateSqliteException', () async {
-      expect(
-        () => repo.badTransaction(),
-        throwsA(isA<IsolateSqliteException>()),
-      );
+    test('bad SQL throws SqliteException', () async {
+      expect(() => repo.badSql(), throwsA(isA<SqliteException>()));
     });
 
-    test('dart exception in transaction stays as Exception', () async {
+    test('duplicate primary key throws SqliteException', () async {
+      await repo.insert('1', 'first');
+
+      expect(() => repo.insert('1', 'dupe'), throwsA(isA<SqliteException>()));
+    });
+
+    test('bad SQL in transaction throws SqliteException', () async {
+      expect(() => repo.badTransaction(), throwsA(isA<SqliteException>()));
+    });
+
+    test('dart exception passthrough', () async {
       expect(
-        () => repo.dartError(),
+        () => repo.dartException(),
         throwsA(
           isA<Exception>().having(
             (e) => e.toString(),
@@ -78,6 +84,10 @@ void main() {
           ),
         ),
       );
+    });
+
+    test('dart errors are passed through', () async {
+      expect(() => repo.dartError(), throwsA(isA<Error>()));
     });
   });
 }
