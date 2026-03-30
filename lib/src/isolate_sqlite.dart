@@ -92,11 +92,11 @@ class IsolateSqlite {
           final result = fn(Transaction._(db));
           db.execute('COMMIT');
           replyTo.send([null, result]);
-        } catch (e) {
+        } catch (e, st) {
           try {
             db.execute('ROLLBACK');
           } catch (_) {}
-          replyTo.send([IsolateError(e), null]);
+          replyTo.send([IsolateError(e, st), null]);
         }
         return;
       }
@@ -120,8 +120,8 @@ class IsolateSqlite {
             cmdPort.close();
           default:
         }
-      } catch (e) {
-        replyTo.send([IsolateError(e), null]);
+      } catch (e, st) {
+        replyTo.send([IsolateError(e, st), null]);
       }
     });
   }

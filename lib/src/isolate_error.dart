@@ -4,9 +4,14 @@
 /// exception passes through without serialization.
 class IsolateError {
   final Object _error;
+  final String _stackTraceString;
 
-  const IsolateError(this._error);
+  IsolateError(this._error, StackTrace stackTrace)
+    : _stackTraceString = stackTrace.toString();
 
   /// Throws the original error. Call on the receiving side.
-  Never throwError() => throw _error;
+  Never throwError() => Error.throwWithStackTrace(
+    _error,
+    StackTrace.fromString(_stackTraceString.toString()),
+  );
 }
