@@ -48,6 +48,10 @@ class IsolateSqlite {
 
   static IsolateInitFn memoryInitFn = () => sqlite3.openInMemory();
 
+  static IsolateInitFn fileInitFn(String filename) {
+    return () => sqlite3.open(filename);
+  }
+
   // IsolateConfigFn? get onIsolateInit => null;
 
   Future<void> open() async {

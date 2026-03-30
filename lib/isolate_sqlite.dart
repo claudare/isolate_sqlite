@@ -5,5 +5,4 @@ library;
 
 export 'src/isolate_sqlite.dart';
 export 'src/solate_sqlite_exception.dart';
-
-// TODO: Export any libraries intended for clients of this package.
+export 'src/temp_file_database.dart';
