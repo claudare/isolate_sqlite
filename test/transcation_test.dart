@@ -86,4 +86,32 @@ void main() {
     final r = await repo.transfer('alice', 'bob', 10);
     expect(r, (from: 90, to: 60));
   });
+
+  test('wrapping works', () async {
+    final concatter = _Concatter('hello, ');
+    final wrapper = _Wrapper(repo, concatter);
+    final result = await wrapper.run('world');
+    expect(result, 'hello, world');
+  });
+}
+
+class _Concatter {
+  final String base;
+
+  const _Concatter(this.base);
+
+  String run(Transaction tx, String added) {
+    return tx.queryValue<String>('SELECT concat(?,?);', [base, added])!;
+  }
+}
+
+class _Wrapper {
+  final IsolateSqlite _db;
+  final _Concatter _toRun;
+
+  const _Wrapper(this._db, this._toRun);
+
+  Future<String> run(String arg) async {
+    return await _db.transaction((tx) => _toRun.run(tx, arg));
+  }
 }

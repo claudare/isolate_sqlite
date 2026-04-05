@@ -109,5 +109,39 @@ void main() {
     test('multiple value return throws StateError', () async {
       expect(() => repo.multipleErrorValue(), throwsA(isA<StateError>()));
     });
+
+    test('error catching in transcations (isolate closures dont work)', () async {
+      bool caught = false;
+
+      await repo.transaction((tx) {
+        // since this is ran inside the isolate, outside variables cant be accessed...
+        // isolates are such footguns in dart
+        try {
+          tx.exec('NOT VALID SQL');
+        } catch (e) {
+          caught = true;
+          // true in local scope
+          // print('caught status $caught');
+        }
+      });
+
+      // this is still false
+      // print("resulting status: $caught");
+
+      expect(caught, isFalse);
+    });
+
+    test('error catching in transcations', () async {
+      final success = await repo.transaction((tx) {
+        try {
+          tx.exec('NOT VALID SQL');
+          return true;
+        } catch (_) {
+          return false;
+        }
+      });
+
+      expect(success, isFalse);
+    });
   });
 }
