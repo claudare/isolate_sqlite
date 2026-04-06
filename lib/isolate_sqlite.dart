@@ -4,5 +4,5 @@
 library;
 
 export 'src/isolate_sqlite.dart';
-export 'src/temp_file_database.dart';
 export 'src/sqlite_migration.dart';
+export 'src/isolate_sqlite_helpers.dart';

@@ -4,17 +4,17 @@ import 'package:test/test.dart';
 void main() {
   group("Disk init", () {
     late IsolateSqlite db;
-    late TempFileDatabase tmp;
+    late String dbPath;
 
     setUp(() async {
-      tmp = TempFileDatabase();
-      db = IsolateSqlite(tmp.initFn);
+      dbPath = IsolateSqliteHelpers.tempDbPath();
+      db = IsolateSqlite(IsolateSqlite.fileInitFn(dbPath));
       await db.open();
     });
 
     tearDown(() async {
       await db.close();
-      tmp.dispose();
+      IsolateSqliteHelpers.deleteDatabaseFiles(dbPath);
     });
 
     test("works", () async {
