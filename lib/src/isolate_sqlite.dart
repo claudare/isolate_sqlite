@@ -41,7 +41,7 @@ class Transaction {
         : rows[0][0] as T;
   }
 
-  void exec(String sql, [List<Object?> params = const []]) {
+  void execute(String sql, [List<Object?> params = const []]) {
     _db.execute(sql, params);
   }
 }
@@ -58,6 +58,13 @@ class IsolateSqlite {
 
   static IsolateInitFn fileInitFn(String filename) {
     return () => sqlite3.open(filename);
+  }
+
+  static IsolateInitFn asyncFileInitFn(Future<String> Function() getFilename) {
+    return () async {
+      final filename = await getFilename();
+      return sqlite3.open(filename);
+    };
   }
 
   Future<void> open() async {
@@ -187,7 +194,7 @@ class IsolateSqlite {
 
   /// Executes SQL and returns nothing.
   /// Throws [SqliteException] if sqlite error occurs.
-  Future<void> exec(String sql, [List<Object?> params = const []]) async {
+  Future<void> execute(String sql, [List<Object?> params = const []]) async {
     await _send(_IsolateSendType.execute, sql, params);
   }
 

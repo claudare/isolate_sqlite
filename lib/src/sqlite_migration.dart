@@ -22,7 +22,7 @@ class SqliteMigrations {
   }
 
   Future<void> migrate(IsolateSqlite db) async {
-    await db.exec('''
+    await db.execute('''
       CREATE TABLE IF NOT EXISTS $migrationTable (
         version INTEGER PRIMARY KEY,
         applied_at TEXT NOT NULL
@@ -39,16 +39,16 @@ class SqliteMigrations {
     for (final m in pending) {
       if (appliedSet.contains(m.version)) continue;
 
-      await db.exec('BEGIN');
+      await db.execute('BEGIN');
       try {
         await m.up(db);
-        await db.exec(
+        await db.execute(
           'INSERT INTO $migrationTable (version, applied_at) VALUES (?, CURRENT_TIMESTAMP)',
           [m.version],
         );
-        await db.exec('COMMIT');
+        await db.execute('COMMIT');
       } catch (e) {
-        await db.exec('ROLLBACK');
+        await db.execute('ROLLBACK');
         rethrow;
       }
     }

@@ -18,8 +18,10 @@ void main() {
     });
 
     test("works", () async {
-      await db.exec("CREATE TABLE test (id INTEGER PRIMARY KEY, value TEXT)");
-      await db.exec("INSERT INTO test (value) VALUES (?)", ["hello"]);
+      await db.execute(
+        "CREATE TABLE test (id INTEGER PRIMARY KEY, value TEXT)",
+      );
+      await db.execute("INSERT INTO test (value) VALUES (?)", ["hello"]);
       final result = await db.queryRow("SELECT * FROM test WHERE id = ?", [1]);
       expect(result, [1, "hello"]);
     });

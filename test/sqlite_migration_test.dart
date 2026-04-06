@@ -22,18 +22,20 @@ void main() {
     final migrations = SqliteMigrations(migrationTable: 'test_migrations')
       ..add(
         SqliteMigration(1, (tx) async {
-          await tx.exec('CREATE TABLE t1 (id TEXT PRIMARY KEY, name STRING)');
-          await tx.exec("CREATE INDEX idx_name ON t1(name);");
+          await tx.execute(
+            'CREATE TABLE t1 (id TEXT PRIMARY KEY, name STRING)',
+          );
+          await tx.execute("CREATE INDEX idx_name ON t1(name);");
         }),
       )
       ..add(
         SqliteMigration(2, (tx) async {
-          await tx.exec('ALTER TABLE t1 ADD COLUMN eye_color TEXT');
+          await tx.execute('ALTER TABLE t1 ADD COLUMN eye_color TEXT');
         }),
       )
       ..add(
         SqliteMigration(3, (tx) async {
-          await tx.exec('CREATE TABLE t2 (id INTEGER PRIMARY KEY)');
+          await tx.execute('CREATE TABLE t2 (id INTEGER PRIMARY KEY)');
         }),
       );
 

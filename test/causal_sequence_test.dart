@@ -5,7 +5,7 @@ class CausalDb extends IsolateSqlite {
   CausalDb() : super(IsolateSqlite.memoryInitFn);
 
   Future<void> setup() async {
-    await exec('''
+    await execute('''
       CREATE TABLE event (
         device_id INTEGER NOT NULL,
         device_sequence INTEGER NOT NULL,
@@ -15,35 +15,35 @@ class CausalDb extends IsolateSqlite {
       );
     ''');
 
-    await exec(
+    await execute(
       'CREATE INDEX idx_device_sequence ON event(device_id, device_sequence);',
     );
-    await exec(
+    await execute(
       'CREATE INDEX idx_causal_sequence ON event(device_id, causal_sequence);',
     );
 
-    await exec('''
+    await execute('''
       CREATE VIEW next_device_sequence AS
       SELECT device_id, COALESCE(MAX(device_sequence), 0) + 1 AS next_seq
       FROM event
       GROUP BY device_id;
     ''');
 
-    await exec('''
+    await execute('''
       CREATE VIEW next_causal_sequence AS
       SELECT device_id, COALESCE(MAX(causal_sequence), 0) + 1 AS next_seq
       FROM event
       GROUP BY device_id;
     ''');
 
-    await exec('''
+    await execute('''
       CREATE VIEW next_local_sequence AS
       SELECT COALESCE(MAX(local_sequence), 0) + 1 AS next_seq
       FROM event;
     ''');
   }
 
-  Future<void> insertEvent(int deviceId) => exec(
+  Future<void> insertEvent(int deviceId) => execute(
     '''
     INSERT INTO event (device_id, device_sequence, causal_sequence, local_sequence)
     VALUES (
@@ -124,7 +124,7 @@ void main() {
     await db.insertEvent(1); // local 2, device 2, causal 2
 
     expect(
-      () => db.exec(
+      () => db.execute(
         'INSERT INTO event (device_id, device_sequence, causal_sequence, local_sequence) VALUES (NULL, 1, 1, 99)',
       ),
       throwsException,
@@ -140,7 +140,7 @@ void main() {
     await db.insertEvent(1); // local 1
 
     expect(
-      () => db.exec(
+      () => db.execute(
         'INSERT INTO event (device_id, device_sequence, causal_sequence, local_sequence) VALUES (?, ?, ?, ?)',
         [1, 99, 99, 1],
       ),

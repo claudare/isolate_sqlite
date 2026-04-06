@@ -4,7 +4,7 @@ import 'package:isolate_sqlite/src/isolate_sqlite.dart';
 class TxRepo extends IsolateSqlite {
   TxRepo(super.initFn);
 
-  Future<void> createTable() => exec('''
+  Future<void> createTable() => execute('''
     CREATE TABLE account (
       id TEXT PRIMARY KEY,
       balance INTEGER NOT NULL CHECK(balance >= 0)
@@ -12,18 +12,18 @@ class TxRepo extends IsolateSqlite {
   ''');
 
   Future<void> seed(String id, int balance) =>
-      exec('INSERT INTO account (id, balance) VALUES (?, ?)', [id, balance]);
+      execute('INSERT INTO account (id, balance) VALUES (?, ?)', [id, balance]);
 
   Future<int?> balanceOf(String id) =>
       queryValue<int>('SELECT balance FROM account WHERE id = ?', [id]);
 
   Future<({int from, int to})> transfer(String from, String to, int amount) =>
       transaction((tx) {
-        tx.exec('UPDATE account SET balance = balance - ? WHERE id = ?', [
+        tx.execute('UPDATE account SET balance = balance - ? WHERE id = ?', [
           amount,
           from,
         ]);
-        tx.exec('UPDATE account SET balance = balance + ? WHERE id = ?', [
+        tx.execute('UPDATE account SET balance = balance + ? WHERE id = ?', [
           amount,
           to,
         ]);
@@ -41,7 +41,7 @@ class TxRepo extends IsolateSqlite {
       });
 
   Future<void> failMidway(String id) => transaction((tx) {
-    tx.exec('UPDATE account SET balance = 999 WHERE id = ?', [id]);
+    tx.execute('UPDATE account SET balance = 999 WHERE id = ?', [id]);
     throw Exception('deliberate');
   });
 }

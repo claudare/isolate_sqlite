@@ -22,11 +22,15 @@ class TodoRepo extends IsolateSqlite {
   TodoRepo(super.initFn);
 
   Future<void> migrate() async {
-    await exec('CREATE TABLE todo (id TEXT PRIMARY KEY, name TEXT NOT NULL)');
+    await execute(
+      'CREATE TABLE todo (id TEXT PRIMARY KEY, name TEXT NOT NULL)',
+    );
   }
 
-  Future<void> insert(Todo todo) =>
-      exec('INSERT INTO todo (id, name) VALUES (?, ?)', [todo.id, todo.name]);
+  Future<void> insert(Todo todo) => execute(
+    'INSERT INTO todo (id, name) VALUES (?, ?)',
+    [todo.id, todo.name],
+  );
 
   Future<void> insertAll(List<Todo> todos) async {
     for (final t in todos) {
@@ -53,10 +57,10 @@ class TodoRepo extends IsolateSqlite {
       await queryValue<int>('SELECT COUNT(*) FROM todo') ?? 0;
 
   Future<void> deleteById(String id) =>
-      exec('DELETE FROM todo WHERE id = ?', [id]);
+      execute('DELETE FROM todo WHERE id = ?', [id]);
 
   Future<void> update(Todo todo) =>
-      exec('UPDATE todo SET name = ? WHERE id = ?', [todo.name, todo.id]);
+      execute('UPDATE todo SET name = ? WHERE id = ?', [todo.name, todo.id]);
 }
 
 // ── Tests ───────────────────────────────────────────────────────────

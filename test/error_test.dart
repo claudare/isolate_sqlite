@@ -6,15 +6,15 @@ class ErrorRepo extends IsolateSqlite {
   ErrorRepo(super.initFn);
 
   Future<void> createTable() =>
-      exec('CREATE TABLE t (id TEXT PRIMARY KEY, val TEXT NOT NULL)');
+      execute('CREATE TABLE t (id TEXT PRIMARY KEY, val TEXT NOT NULL)');
 
   Future<void> insert(String id, String val) =>
-      exec('INSERT INTO t (id, val) VALUES (?, ?)', [id, val]);
+      execute('INSERT INTO t (id, val) VALUES (?, ?)', [id, val]);
 
-  Future<void> badSql() => exec('NOT VALID SQL');
+  Future<void> badSql() => execute('NOT VALID SQL');
 
   Future<void> badTransaction() => transaction((tx) {
-    tx.exec('NOT VALID SQL');
+    tx.execute('NOT VALID SQL');
   });
 
   Future<void> dartException() => transaction((tx) {
@@ -117,7 +117,7 @@ void main() {
         // since this is ran inside the isolate, outside variables cant be accessed...
         // isolates are such footguns in dart
         try {
-          tx.exec('NOT VALID SQL');
+          tx.execute('NOT VALID SQL');
         } catch (e) {
           caught = true;
           // true in local scope
@@ -134,7 +134,7 @@ void main() {
     test('error catching in transcations', () async {
       final success = await repo.transaction((tx) {
         try {
-          tx.exec('NOT VALID SQL');
+          tx.execute('NOT VALID SQL');
           return true;
         } catch (_) {
           return false;
