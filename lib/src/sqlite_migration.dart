@@ -1,6 +1,6 @@
 import 'isolate_sqlite.dart';
 
-typedef MigrationFn = Future<void> Function(IsolateSqlite db);
+typedef MigrationFn = void Function(Transaction tx);
 
 class SqliteMigration {
   final int version;
@@ -21,36 +21,35 @@ class SqliteMigrations {
     _migrations.add(migration);
   }
 
+  // TODO: pass a transaction instead of the database and make migrate sync.
+  // Currently concurrent operations will fail as transaction will include them too.
+  // TODO: execute all migrations under a single transcation. All or nothing.
   Future<void> migrate(IsolateSqlite db) async {
-    await db.execute('''
-      CREATE TABLE IF NOT EXISTS $migrationTable (
-        version INTEGER PRIMARY KEY,
-        applied_at TEXT NOT NULL
-      )
-    ''');
+    await db.transaction((tx) {
+      tx.execute('''
+        CREATE TABLE IF NOT EXISTS $migrationTable (
+          version INTEGER PRIMARY KEY,
+          applied_at TEXT NOT NULL
+        )
+      ''');
 
-    final applied = await db.query(
-      'SELECT version FROM $migrationTable ORDER BY version',
-    );
-    final appliedSet = applied.map((r) => r[0] as int).toSet();
+      final applied = tx.query(
+        'SELECT version FROM $migrationTable ORDER BY version',
+      );
+      final appliedSet = applied.map((r) => r[0] as int).toSet();
 
-    final pending = _migrations..sort((a, b) => a.version.compareTo(b.version));
+      final pending = _migrations
+        ..sort((a, b) => a.version.compareTo(b.version));
 
-    for (final m in pending) {
-      if (appliedSet.contains(m.version)) continue;
+      for (final m in pending) {
+        if (appliedSet.contains(m.version)) continue;
 
-      await db.execute('BEGIN');
-      try {
-        await m.up(db);
-        await db.execute(
+        m.up(tx);
+        db.execute(
           'INSERT INTO $migrationTable (version, applied_at) VALUES (?, CURRENT_TIMESTAMP)',
           [m.version],
         );
-        await db.execute('COMMIT');
-      } catch (e) {
-        await db.execute('ROLLBACK');
-        rethrow;
       }
-    }
+    });
   }
 }

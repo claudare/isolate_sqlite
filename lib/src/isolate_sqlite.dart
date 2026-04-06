@@ -56,6 +56,8 @@ class IsolateSqlite {
 
   static IsolateInitFn memoryInitFn = () => sqlite3.openInMemory();
 
+  // TODO: Add ability to enable WAL, foreign keys, and other common useful
+  // sqlite properties from these simpler functions
   static IsolateInitFn fileInitFn(String filename) {
     return () => sqlite3.open(filename);
   }
