@@ -31,6 +31,7 @@ class TempFileDatabase {
 
   static String _randomHex(int bytes) {
     final rng = Random.secure();
+
     return List.generate(
       bytes,
       (_) => rng.nextInt(256).toRadixString(16).padLeft(2, '0'),

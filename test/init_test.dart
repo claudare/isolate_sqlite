@@ -17,8 +17,11 @@ class IdGen {
 
 class InitRepo extends IsolateSqlite {
   InitRepo(IsolateInitFn initFn, int startSeq)
-    : super(() {
-        final db = initFn();
+    : super(() async {
+        // async is okay too
+        await Future.delayed(Duration(milliseconds: 10));
+
+        final db = await initFn();
 
         IsolateSqlite.enableOptimizations(db);
 

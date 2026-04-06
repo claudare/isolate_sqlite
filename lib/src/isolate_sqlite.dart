@@ -3,7 +3,7 @@ import 'dart:isolate';
 import 'package:isolate_sqlite/src/isolate_error.dart';
 import 'package:sqlite3/sqlite3.dart';
 
-typedef IsolateInitFn = Database Function();
+typedef IsolateInitFn = FutureOr<Database> Function();
 
 enum _IsolateSendType { transaction, select, execute, close }
 
@@ -70,10 +70,10 @@ class IsolateSqlite {
     _cmdPort = await rp.first as SendPort;
   }
 
-  static void _isolateMain((IsolateInitFn, SendPort) args) {
+  static FutureOr<void> _isolateMain((IsolateInitFn, SendPort) args) async {
     final (initFn, initPort) = args;
 
-    final db = initFn();
+    final db = await initFn();
 
     final cmdPort = ReceivePort();
     initPort.send(cmdPort.sendPort);
