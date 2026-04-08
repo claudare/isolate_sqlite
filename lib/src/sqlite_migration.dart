@@ -18,10 +18,8 @@ class SqliteMigrations {
   SqliteMigrations({required String migrationTable})
     : _migrationTable = migrationTable;
 
-  SqliteMigrations add(SqliteMigration migration) {
+  void add(SqliteMigration migration) {
     _migrations.add(migration);
-
-    return this;
   }
 
   // TODO: pass a transaction instead of the database and make migrate sync.
