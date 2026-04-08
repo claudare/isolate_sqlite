@@ -12,13 +12,16 @@ class SqliteMigration {
 // TODO: implement "down" migrations?
 // TODO: option to disable foreign key constraints?
 class SqliteMigrations {
-  final String migrationTable;
+  final String _migrationTable;
   final List<SqliteMigration> _migrations = [];
 
-  SqliteMigrations({this.migrationTable = 'migrations'});
+  SqliteMigrations({required String migrationTable})
+    : _migrationTable = migrationTable;
 
-  void add(SqliteMigration migration) {
+  SqliteMigrations add(SqliteMigration migration) {
     _migrations.add(migration);
+
+    return this;
   }
 
   // TODO: pass a transaction instead of the database and make migrate sync.
@@ -27,14 +30,14 @@ class SqliteMigrations {
   Future<void> migrate(IsolateSqlite db) async {
     await db.transaction((tx) {
       tx.execute('''
-        CREATE TABLE IF NOT EXISTS $migrationTable (
+        CREATE TABLE IF NOT EXISTS $_migrationTable (
           version INTEGER PRIMARY KEY,
           applied_at TEXT NOT NULL
         )
       ''');
 
       final applied = tx.query(
-        'SELECT version FROM $migrationTable ORDER BY version',
+        'SELECT version FROM $_migrationTable ORDER BY version',
       );
       final appliedSet = applied.map((r) => r[0] as int).toSet();
 
@@ -46,7 +49,7 @@ class SqliteMigrations {
 
         m.up(tx);
         db.execute(
-          'INSERT INTO $migrationTable (version, applied_at) VALUES (?, CURRENT_TIMESTAMP)',
+          'INSERT INTO $_migrationTable (version, applied_at) VALUES (?, CURRENT_TIMESTAMP)',
           [m.version],
         );
       }
