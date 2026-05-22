@@ -85,8 +85,6 @@ class IsolateSqlite {
     initPort.send(cmdPort.sendPort);
 
     cmdPort.listen((message) {
-      final tx = SyncContext(db);
-
       final msg = message as List;
       final type = msg[0] as _IsolateSendType;
       final replyTo = msg[1] as SendPort;
@@ -95,9 +93,10 @@ class IsolateSqlite {
         // ── Run: ['run', callback, replyTo]
         case _IsolateSendType.run:
           final fn = msg[2] as Object? Function(SyncContext);
+          final ctx = SyncContext(db, isDatabaseTransaction: false);
 
           try {
-            final result = fn(tx);
+            final result = fn(ctx);
             replyTo.send([null, result]);
           } catch (e, st) {
             replyTo.send([_IsolateError(e, st), null]);
@@ -105,10 +104,11 @@ class IsolateSqlite {
           return;
         case _IsolateSendType.transaction:
           final fn = msg[2] as Object? Function(SyncContext);
+          final ctx = SyncContext(db, isDatabaseTransaction: true);
 
           try {
             db.execute('BEGIN');
-            final result = fn(tx);
+            final result = fn(ctx);
             db.execute('COMMIT');
             replyTo.send([null, result]);
           } catch (e, st) {

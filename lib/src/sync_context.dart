@@ -4,12 +4,17 @@ import 'execute_result.dart';
 import 'row.dart';
 import 'rows.dart';
 
+/// Syncronous execution context with extra helper methods.
+/// This code runs inside the isolate.
 /// TODO: docs on this
 class SyncContext {
   final Database _db;
-  const SyncContext(this._db);
+  final bool _isDatabaseTransaction;
+  const SyncContext(this._db, {required bool isDatabaseTransaction})
+    : _isDatabaseTransaction = isDatabaseTransaction;
 
   Database get db => _db;
+  bool get isDatabaseTransaction => _isDatabaseTransaction;
 
   Rows query(String sql, [List<Object?> params = const []]) {
     final resultSet = _db.select(sql, params);

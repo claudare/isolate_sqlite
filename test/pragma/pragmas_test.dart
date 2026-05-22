@@ -19,18 +19,26 @@ void main() {
   group('foreign keys', () {
     test('default value', () async {
       final result = await db.run((tx) {
-        return PragmaForeignKeys(tx.db).query();
+        return PragmaForeignKeys(tx).query();
       });
       expect(result, false);
     });
     test('set and query', () async {
       await db.run((tx) {
-        PragmaForeignKeys(tx.db).change(true);
+        PragmaForeignKeys(tx).change(true);
       });
       final result = await db.run((tx) {
-        return PragmaForeignKeys(tx.db).query();
+        return PragmaForeignKeys(tx).query();
       });
       expect(result, true);
+    });
+    test('refuses to set in transaction', () async {
+      expect(
+        db.transaction((tx) {
+          PragmaForeignKeys(tx).change(true);
+        }),
+        throwsA(isA<StateError>()),
+      );
     });
   });
 }

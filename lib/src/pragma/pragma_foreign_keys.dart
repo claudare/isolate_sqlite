@@ -1,16 +1,16 @@
-import 'package:sqlite3/sqlite3.dart' show Database;
+import 'package:isolate_sqlite/src/sync_context.dart';
 
 import 'interfaces.dart';
 
 // TODO: schema?
 class PragmaForeignKeys implements QueryOrChange<bool> {
-  final Database _db;
+  final SyncContext _ctx;
 
-  const PragmaForeignKeys(this._db);
+  const PragmaForeignKeys(this._ctx);
 
   @override
   bool query() {
-    final raw = _db.select('PRAGMA foreign_keys;');
+    final raw = _ctx.db.select('PRAGMA foreign_keys;');
     // print("RAW QUERY: $raw, first first: ${raw.rows.first.first}");
 
     return raw.rows.first.first == 1;
@@ -18,6 +18,9 @@ class PragmaForeignKeys implements QueryOrChange<bool> {
 
   @override
   void change(bool value) {
-    _db.execute('PRAGMA foreign_keys = ${value ? 1 : 0};');
+    if (_ctx.isDatabaseTransaction) {
+      throw StateError('Cannot change foreign_keys in a transaction');
+    }
+    _ctx.db.execute('PRAGMA foreign_keys = ${value ? 1 : 0};');
   }
 }
