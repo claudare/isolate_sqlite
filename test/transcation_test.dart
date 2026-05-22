@@ -106,7 +106,7 @@ class _Concatter {
   const _Concatter(this.base);
 
   String run(SyncContext tx, String added) {
-    return tx.queryValue<String>('SELECT concat(?,?);', [base, added])!;
+    return tx.queryValue<String>('SELECT concat(?,?);', [base, added]);
   }
 }
 

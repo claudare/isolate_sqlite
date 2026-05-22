@@ -1,5 +1,3 @@
-import 'dart:typed_data';
-
 import 'package:isolate_sqlite/pragma.dart';
 import 'package:test/test.dart';
 import 'package:isolate_sqlite/isolate_sqlite.dart';
