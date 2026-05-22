@@ -41,4 +41,21 @@ void main() {
       );
     });
   });
+
+  group('journal mode', () {
+    test('default value', () async {
+      final result = await db.run((tx) {
+        return PragmaJournalMode(tx).query();
+      });
+      expect(result, PragmaJournalModeValue.memory);
+    });
+    test('set does not work in memory', () async {
+      expect(
+        db.run((ctx) {
+          return PragmaJournalMode(ctx).change(PragmaJournalModeValue.wal);
+        }),
+        throwsA(isA<StateError>()),
+      );
+    });
+  });
 }
