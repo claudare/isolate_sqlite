@@ -1,7 +1,7 @@
 import 'dart:io';
 import 'dart:math';
 
-class IsolateSqliteHelpers {
+class SqliteHelpers {
   static void deleteDatabaseFiles(String path) {
     for (final suffix in ['', '-wal', '-shm']) {
       final f = File('$path$suffix');

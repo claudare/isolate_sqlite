@@ -1,3 +1,5 @@
+import 'package:isolate_sqlite/src/transaction.dart';
+
 import 'isolate_sqlite.dart';
 
 typedef MigrationFn = void Function(Transaction tx);
@@ -23,9 +25,7 @@ class SqliteMigrations {
     _migrations.add(migration);
   }
 
-  // TODO: pass a transaction instead of the database and make migrate sync.
-  // Currently concurrent operations will fail as transaction will include them too.
-  // TODO: execute all migrations under a single transcation. All or nothing.
+  // TODO: increase maximum lock time on the database, as migrations could be long!
   Future<void> migrate(IsolateSqlite db) async {
     await db.transaction((tx) {
       tx.execute('''

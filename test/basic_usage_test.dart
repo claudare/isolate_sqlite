@@ -33,13 +33,18 @@ class TodoRepo {
     [todo.id, todo.name],
   );
 
-  Future<void> insertMany(List<Todo> todos) async {
+  Future<ExecuteResult> insertMany(List<Todo> todos) {
     final sql =
         'INSERT INTO todo (id, name) VALUES ${todos.map((t) => '(?, ?)').join(', ')}';
     final args = todos.expand((todo) => [todo.id, todo.name]).toList();
 
-    await _db.execute(sql, args);
+    return _db.execute(sql, args);
   }
+
+  Future<ExecuteResult> upsert(Todo todo) => _db.execute(
+    'INSERT INTO todo (id, name) VALUES (?, ?) ON CONFLICT(id) DO UPDATE SET name = ?',
+    [todo.id, todo.name, todo.name],
+  );
 
   Future<Todo?> getById(String id) async {
     final row = await _db.queryRow(
@@ -53,23 +58,22 @@ class TodoRepo {
 
   Future<List<Todo>> getAll() async {
     final rows = await _db.query('SELECT id, name FROM todo ORDER BY id');
-    return [for (final r in rows) Todo(r[0] as String, r[1] as String)];
+    return rows.map((r) => Todo(r.field('id'), r.field('name'))).toList();
   }
 
   Future<List<Todo>> getAllRows() async {
     final rows = await _db.transaction(
-      (tx) => tx.query2('SELECT id, name FROM todo ORDER BY id'),
+      (tx) => tx.query('SELECT id, name FROM todo ORDER BY id'),
     );
     return [for (final r in rows) Todo(r.field('id'), r.field('name'))];
   }
 
-  Future<int> count() async =>
-      await _db.queryValue<int>('SELECT COUNT(*) FROM todo') ?? 0;
+  Future<int> count() => _db.queryValue<int>('SELECT COUNT(*) FROM todo');
 
-  Future<void> deleteById(String id) =>
+  Future<ExecuteResult> deleteById(String id) =>
       _db.execute('DELETE FROM todo WHERE id = ?', [id]);
 
-  Future<void> update(Todo todo) => _db.execute(
+  Future<ExecuteResult> update(Todo todo) => _db.execute(
     'UPDATE todo SET name = ? WHERE id = ?',
     [todo.name, todo.id],
   );
@@ -129,11 +133,13 @@ void main() {
   });
 
   test('getAll returns all inserted rows in order (new method)', () async {
-    await repo.insertMany([
+    final result = await repo.insertMany([
       const Todo('2', 'Second'),
       const Todo('1', 'First'),
       const Todo('3', 'Third'),
     ]);
+    expect(result.modified, 3);
+    expect(result.rowId, 3);
 
     final todos = await repo.getAllRows();
 
@@ -158,7 +164,8 @@ void main() {
   test('delete removes the correct row', () async {
     await repo.insertMany([const Todo('1', 'Keep'), const Todo('2', 'Remove')]);
 
-    await repo.deleteById('2');
+    final result = await repo.deleteById('2');
+    expect(result.modified, 1);
 
     expect(await repo.getById('1'), isNotNull);
     expect(await repo.getById('2'), isNull);
@@ -167,7 +174,8 @@ void main() {
   test('update modifies existing row', () async {
     await repo.insert(const Todo('1', 'Old name'));
 
-    await repo.update(const Todo('1', 'New name'));
+    final result = await repo.update(const Todo('1', 'New name'));
+    expect(result.modified, 1);
 
     final todo = await repo.getById('1');
     expect(todo, equals(const Todo('1', 'New name')));

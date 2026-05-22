@@ -81,7 +81,7 @@ void main() {
 
     // verify data was added
     final result = await db.query('SELECT * FROM t1');
-    expect(result, [
+    expect(result.data, [
       ['1', 'Alice'],
       ['2', 'Bob'],
     ]);

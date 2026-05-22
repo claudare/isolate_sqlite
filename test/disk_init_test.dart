@@ -7,14 +7,14 @@ void main() {
     late String dbPath;
 
     setUp(() async {
-      dbPath = IsolateSqliteHelpers.tempDbPath();
+      dbPath = SqliteHelpers.tempDbPath();
       db = IsolateSqlite();
       await db.open(dbPath);
     });
 
     tearDown(() async {
       await db.close();
-      IsolateSqliteHelpers.deleteDatabaseFiles(dbPath);
+      SqliteHelpers.deleteDatabaseFiles(dbPath);
     });
 
     test("works", () async {
@@ -23,7 +23,7 @@ void main() {
       );
       await db.execute("INSERT INTO test (value) VALUES (?)", ["hello"]);
       final result = await db.queryRow("SELECT * FROM test WHERE id = ?", [1]);
-      expect(result, [1, "hello"]);
+      expect(result!.values, [1, "hello"]);
     });
   });
 }

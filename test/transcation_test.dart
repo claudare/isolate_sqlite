@@ -1,5 +1,5 @@
+import 'package:isolate_sqlite/isolate_sqlite.dart';
 import 'package:test/test.dart';
-import 'package:isolate_sqlite/src/isolate_sqlite.dart';
 
 class TxRepo {
   final IsolateSqlite db;
@@ -35,11 +35,11 @@ class TxRepo {
         final fromBal = tx.queryValue<int>(
           'SELECT balance FROM account WHERE id = ?',
           [from],
-        )!;
+        );
         final toBal = tx.queryValue<int>(
           'SELECT balance FROM account WHERE id = ?',
           [to],
-        )!;
+        );
 
         return (from: fromBal, to: toBal);
       });
