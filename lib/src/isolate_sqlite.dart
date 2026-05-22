@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:isolate';
 import 'package:isolate_sqlite/src/isolate_error.dart';
+import 'package:isolate_sqlite/src/isolate_row.dart';
 import 'package:sqlite3/sqlite3.dart';
 
 typedef SetupFn = void Function(Database);
@@ -31,6 +32,11 @@ enum _IsolateSendType { transaction, select, execute, close }
 class Transaction {
   final Database _db;
   const Transaction._(this._db);
+
+  Rows query2(String sql, [List<Object?> params = const []]) {
+    final resultSet = _db.select(sql, params);
+    return Rows(resultSet.columnNames, resultSet.rows);
+  }
 
   List<List<Object?>> query(String sql, [List<Object?> params = const []]) {
     return _db.select(sql, params).rows;

@@ -56,6 +56,13 @@ class TodoRepo {
     return [for (final r in rows) Todo(r[0] as String, r[1] as String)];
   }
 
+  Future<List<Todo>> getAllRows() async {
+    final rows = await _db.transaction(
+      (tx) => tx.query2('SELECT id, name FROM todo ORDER BY id'),
+    );
+    return [for (final r in rows) Todo(r.field('id'), r.field('name'))];
+  }
+
   Future<int> count() async =>
       await _db.queryValue<int>('SELECT COUNT(*) FROM todo') ?? 0;
 
@@ -113,6 +120,22 @@ void main() {
     ]);
 
     final todos = await repo.getAll();
+
+    expect(todos, [
+      const Todo('1', 'First'),
+      const Todo('2', 'Second'),
+      const Todo('3', 'Third'),
+    ]);
+  });
+
+  test('getAll returns all inserted rows in order (new method)', () async {
+    await repo.insertMany([
+      const Todo('2', 'Second'),
+      const Todo('1', 'First'),
+      const Todo('3', 'Third'),
+    ]);
+
+    final todos = await repo.getAllRows();
 
     expect(todos, [
       const Todo('1', 'First'),
