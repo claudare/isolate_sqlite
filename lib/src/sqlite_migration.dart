@@ -1,8 +1,8 @@
-import 'package:isolate_sqlite/src/transaction.dart';
+import 'package:isolate_sqlite/src/sync_context.dart';
 
 import 'isolate_sqlite.dart';
 
-typedef MigrationFn = void Function(Transaction tx);
+typedef MigrationFn = void Function(SyncContext tx);
 
 class SqliteMigration {
   final int version;

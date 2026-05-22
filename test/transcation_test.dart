@@ -95,7 +95,7 @@ void main() {
   test('wrapping works', () async {
     final concatter = _Concatter('hello, ');
     final wrapper = _Wrapper(repo.db, concatter);
-    final result = await wrapper.run('world');
+    final result = await wrapper.wrap('world');
     expect(result, 'hello, world');
   });
 }
@@ -105,7 +105,7 @@ class _Concatter {
 
   const _Concatter(this.base);
 
-  String run(Transaction tx, String added) {
+  String run(SyncContext tx, String added) {
     return tx.queryValue<String>('SELECT concat(?,?);', [base, added])!;
   }
 }
@@ -116,7 +116,7 @@ class _Wrapper {
 
   const _Wrapper(this._db, this._toRun);
 
-  Future<String> run(String arg) async {
+  Future<String> wrap(String arg) async {
     return await _db.transaction((tx) => _toRun.run(tx, arg));
   }
 }

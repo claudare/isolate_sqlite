@@ -5,14 +5,14 @@ import 'package:sqlite3/sqlite3.dart' show Database, OpenMode, sqlite3;
 import 'execute_result.dart';
 import 'row.dart';
 import 'rows.dart';
-import 'transaction.dart';
+import 'sync_context.dart';
 
 const _memoryFilename = ':memory:';
 
 typedef SetupFn = void Function(Database);
 
 class IsolateSqlite {
-  bool _opened = false;
+  bool _isOpen = false;
   late final SendPort _cmdPort;
   late final Isolate _isolate;
 
@@ -37,10 +37,10 @@ class IsolateSqlite {
     bool? mutex,
     SetupFn? setup,
   }) async {
-    if (_opened) {
+    if (_isOpen) {
       throw StateError('Database already opened');
     }
-    _opened = true;
+    _isOpen = true;
 
     final options = _OpenOptions(
       filename: filename,
@@ -85,100 +85,107 @@ class IsolateSqlite {
     initPort.send(cmdPort.sendPort);
 
     cmdPort.listen((message) {
-      final tx = Transaction(db);
+      final tx = SyncContext(db);
 
       final msg = message as List;
       final type = msg[0] as _IsolateSendType;
+      final replyTo = msg[1] as SendPort;
 
-      if (type == _IsolateSendType.raw) {
-        final fn = msg[1] as Object? Function(Transaction);
-        final replyTo = msg[2] as SendPort;
+      switch (type) {
+        // ── Run: ['run', callback, replyTo]
+        case _IsolateSendType.run:
+          final fn = msg[2] as Object? Function(SyncContext);
 
-        try {
-          final result = fn(tx);
-          replyTo.send([null, result]);
-        } catch (e, st) {
-          replyTo.send([IsolateError(e, st), null]);
-        }
-        return;
-      }
-
-      // ── Transaction: ['transaction', callback, replyTo]
-      if (type == _IsolateSendType.transaction) {
-        final fn = msg[1] as Object? Function(Transaction);
-        final replyTo = msg[2] as SendPort;
-
-        try {
-          db.execute('BEGIN');
-          final result = fn(tx);
-          db.execute('COMMIT');
-          replyTo.send([null, result]);
-        } catch (e, st) {
           try {
-            db.execute('ROLLBACK');
-          } catch (_) {}
-          replyTo.send([IsolateError(e, st), null]);
-        }
-        return;
-      }
+            final result = fn(tx);
+            replyTo.send([null, result]);
+          } catch (e, st) {
+            replyTo.send([_IsolateError(e, st), null]);
+          }
+          return;
+        case _IsolateSendType.transaction:
+          final fn = msg[2] as Object? Function(SyncContext);
 
-      // ── Standard: ['type', sql, params, replyTo]
-      final sql = msg[1] as String;
-      final params = (msg[2] as List).cast<Object?>();
-      final replyTo = msg[3] as SendPort;
-
-      try {
-        switch (type) {
-          case _IsolateSendType.query:
-            final result = tx.query(sql, params);
+          try {
+            db.execute('BEGIN');
+            final result = fn(tx);
+            db.execute('COMMIT');
             replyTo.send([null, result]);
-          case _IsolateSendType.queryRow:
-            final result = tx.queryRow(sql, params);
-            replyTo.send([null, result]);
-          case _IsolateSendType.queryValue:
-            final result = tx.queryValue(sql, params);
-            replyTo.send([null, result]);
-          case _IsolateSendType.execute:
-            final result = tx.execute(sql, params);
-            replyTo.send([null, result]);
-          case _IsolateSendType.close:
+          } catch (e, st) {
+            try {
+              db.execute('ROLLBACK');
+            } catch (_) {}
+            replyTo.send([_IsolateError(e, st), null]);
+          }
+          return;
+        case _IsolateSendType.close:
+          try {
             db.close();
+
             replyTo.send([null, null]);
+          } catch (e, st) {
+            replyTo.send([_IsolateError(e, st), null]);
+          } finally {
             cmdPort.close();
-          default:
-        }
-      } catch (e, st) {
-        replyTo.send([IsolateError(e, st), null]);
+          }
       }
     });
   }
 
-  Future<T> _runInIsolate<T>(
-    _IsolateSendType type, [
-    String sql = '',
-    List<Object?> params = const [],
-  ]) async {
+  Future<T> _runInIsolate<T>(_IsolateSendType type, Object? arg) async {
     final rp = ReceivePort();
-    _cmdPort.send([type, sql, params, rp.sendPort]);
+    _cmdPort.send([type, rp.sendPort, arg]);
     final resp = await rp.first as List;
     rp.close();
     if (resp[0] != null) {
-      (resp[0] as IsolateError).throwError();
+      (resp[0] as _IsolateError).throwError();
     }
 
     return resp[1] as T;
   }
 
+  /// Runs the synchronous [action] in the isolate and returns the result.
+  /// This method does not issue BEGIN/COMMIT transactions, unlike [transaction].
+  /// Any errors thrown by the function are rethrown.
+  Future<T> run<T>(T Function(SyncContext ctx) action) async {
+    if (!_isOpen) throw StateError('IsolateSqlite is not opened');
+
+    return _runInIsolate(_IsolateSendType.run, action);
+  }
+
+  /// Runs the synchronous [action] inside the sqlite transaction and returns the result.
+  /// Execution of action is wrapped in a BEGIN/COMMIT transaction.
+  /// Any errors thrown by the function issues a ROLLBACK before rethrowing.
+  Future<T> transaction<T>(T Function(SyncContext tx) action) async {
+    if (!_isOpen) throw StateError('IsolateSqlite is not opened');
+
+    return _runInIsolate(_IsolateSendType.transaction, action);
+  }
+
+  Future<void> close() async {
+    if (!_isOpen) return;
+
+    try {
+      await _runInIsolate(_IsolateSendType.close, null);
+    } catch (e, st) {
+      // TODO: should close error be ignored?
+      Error.throwWithStackTrace(e, st);
+    } finally {
+      _isolate.kill(priority: Isolate.immediate);
+      _isOpen = false;
+    }
+  }
+
   /// Queries and returns all rows.
   /// Throws [SqliteException] if sqlite error occurs.
   Future<Rows> query(String sql, [List<Object?> params = const []]) {
-    return _runInIsolate<Rows>(_IsolateSendType.query, sql, params);
+    return run((tx) => tx.query(sql, params));
   }
 
   /// Queries and returns the first row, `null` if no rows are returned.
   /// Throws [SqliteException] if sqlite error occurs.
   Future<Row?> queryRow(String sql, [List<Object?> params = const []]) {
-    return _runInIsolate<Row?>(_IsolateSendType.queryRow, sql, params);
+    return run((tx) => tx.queryRow(sql, params));
   }
 
   /// Queries and returns the first value of the first row.
@@ -186,51 +193,13 @@ class IsolateSqlite {
   /// incompatible with [T].
   /// Throws [SqliteException] if sqlite error occurs.
   Future<T> queryValue<T>(String sql, [List<Object?> params = const []]) {
-    return _runInIsolate<T>(_IsolateSendType.queryValue, sql, params);
+    return run((tx) => tx.queryValue<T>(sql, params));
   }
 
   /// Executes SQL and returns nothing.
   /// Throws [SqliteException] if sqlite error occurs.
   Future<ExecuteResult> execute(String sql, [List<Object?> params = const []]) {
-    return _runInIsolate<ExecuteResult>(_IsolateSendType.execute, sql, params);
-  }
-
-  /// Runs the synchronous [action] in the isolate and returns the result.
-  /// This method does not issue BEGIN/COMMIT transactions, unlike [transaction].
-  /// Any errors thrown by the function are rethrown.
-  Future<T> run<T>(T Function(Transaction tx) action) async {
-    final rp = ReceivePort();
-    _cmdPort.send([_IsolateSendType.raw, action, rp.sendPort]);
-    final resp = await rp.first as List;
-    rp.close();
-
-    if (resp[0] != null) {
-      (resp[0] as IsolateError).throwError();
-    }
-
-    return resp[1] as T;
-  }
-
-  /// Runs the synchronous [action] inside the sqlite transaction and returns the result.
-  /// Execution of action is wrapped in a BEGIN/COMMIT transaction.
-  /// Any errors thrown by the function issues a ROLLBACK before rethrowing.
-  Future<T> transaction<T>(T Function(Transaction tx) action) async {
-    final rp = ReceivePort();
-    _cmdPort.send([_IsolateSendType.transaction, action, rp.sendPort]);
-    final resp = await rp.first as List;
-    rp.close();
-
-    if (resp[0] != null) {
-      (resp[0] as IsolateError).throwError();
-    }
-
-    return resp[1] as T;
-  }
-
-  Future<void> close() async {
-    await _runInIsolate(_IsolateSendType.close);
-    _isolate.kill(priority: Isolate.immediate);
-    _opened = false;
+    return run((tx) => tx.execute(sql, params));
   }
 
   // all-in-one best practices pragma settings
@@ -259,25 +228,13 @@ class _OpenOptions {
   });
 }
 
-enum _IsolateSendType {
-  raw,
-  transaction,
-  query,
-  queryRow,
-  queryValue,
-  execute,
-  close,
-}
+enum _IsolateSendType { run, transaction, close }
 
-/// Wraps any error for transport through a [SendPort].
-///
-/// Same isolate group = shared heap, so the original
-/// exception passes through without serialization.
-class IsolateError {
+class _IsolateError {
   final Object _error;
   final String _stackTraceString;
 
-  IsolateError(this._error, StackTrace stackTrace)
+  _IsolateError(this._error, StackTrace stackTrace)
     : _stackTraceString = stackTrace.toString();
 
   /// Throws the original error. Call on the receiving side.

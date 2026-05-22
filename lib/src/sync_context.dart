@@ -5,9 +5,9 @@ import 'row.dart';
 import 'rows.dart';
 
 /// TODO: docs on this
-class Transaction {
+class SyncContext {
   final Database _db;
-  const Transaction(this._db);
+  const SyncContext(this._db);
 
   Database get db => _db;
 
