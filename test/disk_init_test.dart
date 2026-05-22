@@ -8,8 +8,8 @@ void main() {
 
     setUp(() async {
       dbPath = IsolateSqliteHelpers.tempDbPath();
-      db = IsolateSqlite(IsolateSqlite.fileInitFn(dbPath));
-      await db.open();
+      db = IsolateSqlite();
+      await db.open(dbPath);
     });
 
     tearDown(() async {

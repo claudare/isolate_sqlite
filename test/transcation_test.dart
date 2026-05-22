@@ -1,24 +1,28 @@
 import 'package:test/test.dart';
 import 'package:isolate_sqlite/src/isolate_sqlite.dart';
 
-class TxRepo extends IsolateSqlite {
-  TxRepo(super.initFn);
+class TxRepo {
+  final IsolateSqlite db;
 
-  Future<void> createTable() => execute('''
+  TxRepo(this.db);
+
+  Future<void> migrate() => db.execute('''
     CREATE TABLE account (
       id TEXT PRIMARY KEY,
       balance INTEGER NOT NULL CHECK(balance >= 0)
     )
   ''');
 
-  Future<void> seed(String id, int balance) =>
-      execute('INSERT INTO account (id, balance) VALUES (?, ?)', [id, balance]);
+  Future<void> seed(String id, int balance) => db.execute(
+    'INSERT INTO account (id, balance) VALUES (?, ?)',
+    [id, balance],
+  );
 
   Future<int?> balanceOf(String id) =>
-      queryValue<int>('SELECT balance FROM account WHERE id = ?', [id]);
+      db.queryValue<int>('SELECT balance FROM account WHERE id = ?', [id]);
 
   Future<({int from, int to})> transfer(String from, String to, int amount) =>
-      transaction((tx) {
+      db.transaction((tx) {
         tx.execute('UPDATE account SET balance = balance - ? WHERE id = ?', [
           amount,
           from,
@@ -40,7 +44,7 @@ class TxRepo extends IsolateSqlite {
         return (from: fromBal, to: toBal);
       });
 
-  Future<void> failMidway(String id) => transaction((tx) {
+  Future<void> failMidway(String id) => db.transaction((tx) {
     tx.execute('UPDATE account SET balance = 999 WHERE id = ?', [id]);
     throw Exception('deliberate');
   });
@@ -50,14 +54,15 @@ void main() {
   late TxRepo repo;
 
   setUp(() async {
-    repo = TxRepo(IsolateSqlite.memoryInitFn);
-    await repo.open();
-    await repo.createTable();
+    final db = IsolateSqlite();
+    repo = TxRepo(db);
+    await db.openInMemory();
+    await repo.migrate();
     await repo.seed('alice', 100);
     await repo.seed('bob', 50);
   });
 
-  tearDown(() => repo.close());
+  tearDown(() => repo.db.close());
 
   test('commits and returns result', () async {
     final r = await repo.transfer('alice', 'bob', 30);
@@ -89,7 +94,7 @@ void main() {
 
   test('wrapping works', () async {
     final concatter = _Concatter('hello, ');
-    final wrapper = _Wrapper(repo, concatter);
+    final wrapper = _Wrapper(repo.db, concatter);
     final result = await wrapper.run('world');
     expect(result, 'hello, world');
   });

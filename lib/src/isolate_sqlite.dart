@@ -3,7 +3,27 @@ import 'dart:isolate';
 import 'package:isolate_sqlite/src/isolate_error.dart';
 import 'package:sqlite3/sqlite3.dart';
 
-typedef IsolateInitFn = FutureOr<Database> Function();
+typedef SetupFn = void Function(Database);
+
+const _memoryFilename = ':memory:';
+
+class _OpenOptions {
+  String filename;
+  String? vfs;
+  OpenMode mode;
+  bool uri = false;
+  bool? mutex;
+  SetupFn? setup;
+
+  _OpenOptions({
+    required this.filename,
+    this.vfs,
+    this.mode = OpenMode.readWriteCreate,
+    this.uri = false,
+    this.mutex,
+    this.setup,
+  });
+}
 
 enum _IsolateSendType { transaction, select, execute, close }
 
@@ -19,7 +39,7 @@ class Transaction {
   List<Object?>? queryRow(String sql, [List<Object?> params = const []]) {
     final rows = query(sql, params);
     if (rows.length > 1) {
-      throw StateError('More than one row returned for queryValue');
+      throw StateError('More than one row returned for queryRow');
     }
 
     return rows.isEmpty ? null : rows[0];
@@ -48,41 +68,73 @@ class Transaction {
 
 class IsolateSqlite {
   bool _opened = false;
-  final IsolateInitFn _initFn;
   late final SendPort _cmdPort;
   late final Isolate _isolate;
 
-  IsolateSqlite(this._initFn);
+  IsolateSqlite();
 
-  static IsolateInitFn memoryInitFn = () => sqlite3.openInMemory();
-
-  // TODO: Add ability to enable WAL, foreign keys, and other common useful
-  // sqlite properties from these simpler functions
-  static IsolateInitFn fileInitFn(String filename) {
-    return () => sqlite3.open(filename);
-  }
-
-  static IsolateInitFn asyncFileInitFn(Future<String> Function() getFilename) {
-    return () async {
-      final filename = await getFilename();
-      return sqlite3.open(filename);
-    };
-  }
-
-  Future<void> open() async {
+  /// Opens a database file.
+  ///
+  /// The [vfs] option can be used to set the appropriate virtual file system
+  /// implementation. When null, the default file system will be used.
+  ///
+  /// If [uri] is enabled (defaults to `false`), the [filename] will be
+  /// interpreted as an uri as according to https://www.sqlite.org/uri.html.
+  ///
+  /// If the [mutex] parameter is set to true, the `SQLITE_OPEN_FULLMUTEX` flag
+  /// will be set. If it's set to false, `SQLITE_OPEN_NOMUTEX` will be enabled.
+  /// By default, neither parameter will be set.
+  Future<void> open(
+    String filename, {
+    String? vfs,
+    OpenMode mode = OpenMode.readWriteCreate,
+    bool uri = false,
+    bool? mutex,
+    SetupFn? setup,
+  }) async {
     if (_opened) {
       throw StateError('Database already opened');
     }
     _opened = true;
+
+    final options = _OpenOptions(
+      filename: filename,
+      vfs: vfs,
+      mode: mode,
+      uri: uri,
+      mutex: mutex,
+      setup: setup,
+    );
+
     final rp = ReceivePort();
-    _isolate = await Isolate.spawn(_isolateMain, (_initFn, rp.sendPort));
+    _isolate = await Isolate.spawn(_isolateMain, (options, rp.sendPort));
     _cmdPort = await rp.first as SendPort;
   }
 
-  static FutureOr<void> _isolateMain((IsolateInitFn, SendPort) args) async {
-    final (initFn, initPort) = args;
+  /// Opens an in-memory database.
+  ///
+  /// The [vfs] option can be used to set the appropriate virtual file system
+  /// implementation. When null, the default file system will be used.
+  Future<void> openInMemory({String? vfs, SetupFn? setup}) {
+    return open(_memoryFilename, vfs: vfs, setup: setup);
+  }
 
-    final db = await initFn();
+  static FutureOr<void> _isolateMain((_OpenOptions, SendPort) args) async {
+    final (options, initPort) = args;
+
+    final db = options.filename == _memoryFilename
+        ? sqlite3.openInMemory(vfs: options.vfs)
+        : sqlite3.open(
+            options.filename,
+            vfs: options.vfs,
+            mode: options.mode,
+            uri: options.uri,
+            mutex: options.mutex,
+          );
+
+    if (options.setup != null) {
+      options.setup!(db);
+    }
 
     final cmdPort = ReceivePort();
     initPort.send(cmdPort.sendPort);

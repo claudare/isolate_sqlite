@@ -5,8 +5,8 @@ void main() {
   late IsolateSqlite iso;
 
   setUp(() async {
-    iso = IsolateSqlite(() => sqlite3.openInMemory());
-    await iso.open();
+    iso = IsolateSqlite();
+    await iso.openInMemory();
     await iso.execute("CREATE TABLE test (id TEXT PRIMARY KEY);");
   });
 

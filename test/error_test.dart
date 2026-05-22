@@ -1,40 +1,41 @@
 import 'package:isolate_sqlite/isolate_sqlite.dart';
-import 'package:sqlite3/sqlite3.dart';
 import 'package:test/test.dart';
 
-class ErrorRepo extends IsolateSqlite {
-  ErrorRepo(super.initFn);
+class ErrorRepo {
+  final IsolateSqlite db;
+
+  ErrorRepo(this.db);
 
   Future<void> createTable() =>
-      execute('CREATE TABLE t (id TEXT PRIMARY KEY, val TEXT NOT NULL)');
+      db.execute('CREATE TABLE t (id TEXT PRIMARY KEY, val TEXT NOT NULL)');
 
   Future<void> insert(String id, String val) =>
-      execute('INSERT INTO t (id, val) VALUES (?, ?)', [id, val]);
+      db.execute('INSERT INTO t (id, val) VALUES (?, ?)', [id, val]);
 
-  Future<void> badSql() => execute('NOT VALID SQL');
+  Future<void> badSql() => db.execute('NOT VALID SQL');
 
-  Future<void> badTransaction() => transaction((tx) {
+  Future<void> badTransaction() => db.transaction((tx) {
     tx.execute('NOT VALID SQL');
   });
 
-  Future<void> dartException() => transaction((tx) {
+  Future<void> dartException() => db.transaction((tx) {
     throw Exception('dart exception');
   });
 
-  Future<void> dartError() => transaction((tx) {
+  Future<void> dartError() => db.transaction((tx) {
     throw Error();
   });
 
   Future<void> multipleErrorRow() async {
     await insert('1', 'first');
     await insert('2', 'second');
-    await queryRow('SELECT * FROM t');
+    await db.queryRow('SELECT * FROM t');
   }
 
   Future<void> multipleErrorValue() async {
     await insert('1', 'first');
     await insert('2', 'second');
-    await queryValue('SELECT id FROM t');
+    await db.queryValue('SELECT id FROM t');
   }
 }
 
@@ -42,12 +43,12 @@ void main() {
   late ErrorRepo repo;
 
   setUp(() async {
-    repo = ErrorRepo(() => sqlite3.openInMemory());
-    await repo.open();
+    repo = ErrorRepo(IsolateSqlite());
+    await repo.db.openInMemory();
     await repo.createTable();
   });
 
-  tearDown(() => repo.close());
+  tearDown(() => repo.db.close());
 
   group("errors", () {
     test('SqliteException is returned in full', () async {
@@ -113,7 +114,7 @@ void main() {
     test('error catching in transcations (isolate closures dont work)', () async {
       bool caught = false;
 
-      await repo.transaction((tx) {
+      await repo.db.transaction((tx) {
         // since this is ran inside the isolate, outside variables cant be accessed...
         // isolates are such footguns in dart
         try {
@@ -132,7 +133,7 @@ void main() {
     });
 
     test('error catching in transcations', () async {
-      final success = await repo.transaction((tx) {
+      final success = await repo.db.transaction((tx) {
         try {
           tx.execute('NOT VALID SQL');
           return true;

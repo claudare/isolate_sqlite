@@ -9,6 +9,9 @@ class IsolateSqliteHelpers {
     }
   }
 
+  /// Gets a temporary database path in the system temp directory.
+  /// Note: this may work unreliably in flutter.
+  /// Use [getApplicationSupportDirectory] from `path_provider` instead.
   static String tempDbPath() {
     final id = _randomHex(16);
     final dir = Directory.systemTemp.path;

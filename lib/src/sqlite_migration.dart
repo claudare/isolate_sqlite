@@ -6,6 +6,7 @@ class SqliteMigration {
   final int version;
   final MigrationFn up;
 
+  // TODO: make up a named paramter
   const SqliteMigration(this.version, this.up);
 }
 

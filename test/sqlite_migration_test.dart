@@ -2,16 +2,12 @@ import 'package:test/test.dart';
 
 import 'package:isolate_sqlite/isolate_sqlite.dart';
 
-class TestDb extends IsolateSqlite {
-  TestDb() : super(IsolateSqlite.memoryInitFn);
-}
-
 void main() {
-  late TestDb db;
+  late IsolateSqlite db;
 
   setUp(() async {
-    db = TestDb();
-    await db.open();
+    db = IsolateSqlite();
+    await db.openInMemory();
   });
 
   tearDown(() async {
@@ -21,18 +17,18 @@ void main() {
   test('applies pending migrations once, in order', () async {
     final migrations = SqliteMigrations(migrationTable: 'test_migrations')
       ..add(
-        SqliteMigration(1, (tx) async {
+        SqliteMigration(1, (tx) {
           tx.execute('CREATE TABLE t1 (id TEXT PRIMARY KEY, name STRING)');
           tx.execute("CREATE INDEX idx_name ON t1(name);");
         }),
       )
       ..add(
-        SqliteMigration(2, (tx) async {
+        SqliteMigration(2, (tx) {
           tx.execute('ALTER TABLE t1 ADD COLUMN eye_color TEXT');
         }),
       )
       ..add(
-        SqliteMigration(3, (tx) async {
+        SqliteMigration(3, (tx) {
           tx.execute('CREATE TABLE t2 (id INTEGER PRIMARY KEY)');
         }),
       );

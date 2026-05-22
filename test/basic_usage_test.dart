@@ -17,28 +17,32 @@ class Todo {
   String toString() => 'Todo($id, $name)';
 }
 
-class TodoRepo extends IsolateSqlite {
-  TodoRepo(super.initFn);
+class TodoRepo {
+  final IsolateSqlite _db;
+
+  const TodoRepo(this._db);
 
   Future<void> migrate() async {
-    await execute(
+    await _db.execute(
       'CREATE TABLE todo (id TEXT PRIMARY KEY, name TEXT NOT NULL)',
     );
   }
 
-  Future<void> insert(Todo todo) => execute(
+  Future<void> insert(Todo todo) => _db.execute(
     'INSERT INTO todo (id, name) VALUES (?, ?)',
     [todo.id, todo.name],
   );
 
-  Future<void> insertAll(List<Todo> todos) async {
-    for (final t in todos) {
-      await insert(t);
-    }
+  Future<void> insertMany(List<Todo> todos) async {
+    final sql =
+        'INSERT INTO todo (id, name) VALUES ${todos.map((t) => '(?, ?)').join(', ')}';
+    final args = todos.expand((todo) => [todo.id, todo.name]).toList();
+
+    await _db.execute(sql, args);
   }
 
   Future<Todo?> getById(String id) async {
-    final row = await queryRow(
+    final row = await _db.queryRow(
       'SELECT id, name FROM todo WHERE id = ? LIMIT 1',
       [id],
     );
@@ -48,33 +52,37 @@ class TodoRepo extends IsolateSqlite {
   }
 
   Future<List<Todo>> getAll() async {
-    final rows = await query('SELECT id, name FROM todo ORDER BY id');
+    final rows = await _db.query('SELECT id, name FROM todo ORDER BY id');
     return [for (final r in rows) Todo(r[0] as String, r[1] as String)];
   }
 
   Future<int> count() async =>
-      await queryValue<int>('SELECT COUNT(*) FROM todo') ?? 0;
+      await _db.queryValue<int>('SELECT COUNT(*) FROM todo') ?? 0;
 
   Future<void> deleteById(String id) =>
-      execute('DELETE FROM todo WHERE id = ?', [id]);
+      _db.execute('DELETE FROM todo WHERE id = ?', [id]);
 
-  Future<void> update(Todo todo) =>
-      execute('UPDATE todo SET name = ? WHERE id = ?', [todo.name, todo.id]);
+  Future<void> update(Todo todo) => _db.execute(
+    'UPDATE todo SET name = ? WHERE id = ?',
+    [todo.name, todo.id],
+  );
 }
 
 // ── Tests ───────────────────────────────────────────────────────────
 
 void main() {
+  late IsolateSqlite db;
   late TodoRepo repo;
 
   setUp(() async {
-    repo = TodoRepo(() => sqlite3.openInMemory());
-    await repo.open();
+    db = IsolateSqlite();
+    repo = TodoRepo(db);
+    await db.openInMemory();
     await repo.migrate();
   });
 
   tearDown(() async {
-    await repo.close();
+    await db.close();
   });
 
   test('insert and retrieve by id', () async {
@@ -98,7 +106,7 @@ void main() {
   });
 
   test('getAll returns all inserted rows in order', () async {
-    await repo.insertAll([
+    await repo.insertMany([
       const Todo('2', 'Second'),
       const Todo('1', 'First'),
       const Todo('3', 'Third'),
@@ -125,7 +133,7 @@ void main() {
   });
 
   test('delete removes the correct row', () async {
-    await repo.insertAll([const Todo('1', 'Keep'), const Todo('2', 'Remove')]);
+    await repo.insertMany([const Todo('1', 'Keep'), const Todo('2', 'Remove')]);
 
     await repo.deleteById('2');
 

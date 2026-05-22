@@ -7,8 +7,8 @@ void main() {
   late IsolateSqlite db;
 
   setUp(() async {
-    db = IsolateSqlite(() => sqlite3.openInMemory());
-    await db.open();
+    db = IsolateSqlite();
+    await db.openInMemory();
     await db.execute(
       "CREATE TABLE test (text TEXT PRIMARY KEY NOT NULL, integer INTEGER NOT NULL, real REAL NOT NULL, blob BLOB NOT NULL, nullable INTEGER);",
     );
