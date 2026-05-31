@@ -25,7 +25,9 @@ class SyncContext {
     final rows = query(sql, params);
 
     if (rows.length > 1) {
-      throw StateError('More than one row returned for queryRow');
+      throw StateError(
+        'More than one row returned for queryRow. SQL: $sql, params: $params',
+      );
     }
 
     return rows.isEmpty ? null : rows[0];
@@ -34,12 +36,16 @@ class SyncContext {
   T queryValue<T>(String sql, [List<Object?> params = const []]) {
     final rows = query(sql, params);
     if (rows.length > 1) {
-      throw StateError('More than one row returned for queryValue');
+      throw StateError(
+        'More than one row returned for queryValue. SQL: $sql, params: $params',
+      );
     }
 
     if (rows.isEmpty) {
       if (null is T) return null as T;
-      throw StateError('No rows returned but expected non-nullable $T');
+      throw StateError(
+        'No rows returned but expected non-nullable $T. SQL: $sql, params: $params',
+      );
     }
     return rows[0].fieldAt<T>(0);
   }
